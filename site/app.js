@@ -99,16 +99,38 @@ const ui = { q: "", risk: "all" };
 let state = load();
 
 function load() {
+  let loaded;
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const saved = JSON.parse(raw);
-      if (saved && Array.isArray(saved.customers)) return saved;
+      if (saved && Array.isArray(saved.customers)) loaded = saved;
     }
   } catch (err) { /* replace an unreadable save with the sample book */ }
-  const fresh = { customers: samples() };
-  localStorage.setItem(KEY, JSON.stringify(fresh));
-  return fresh;
+  if (!loaded) loaded = { customers: samples() };
+  loaded.customers.forEach(normalizeCustomer);
+  localStorage.setItem(KEY, JSON.stringify(loaded));
+  return loaded;
+}
+
+function normalizeCustomer(item) {
+  item.kickoff = item.kickoff || {};
+  const kickoff = item.kickoff;
+  if (kickoff.marketplaces == null) kickoff.marketplaces = "";
+  if (kickoff.carriers == null) kickoff.carriers = "";
+  if (kickoff.integrations == null) kickoff.integrations = "";
+  if (item.sample && !kickoff.marketplaces && !kickoff.carriers && kickoff.integrations) {
+    const known = {
+      "Sample — Atlas Fulfillment": ["Shopify now; NetSuite later", ""],
+      "Sample — Cedar Warehouse": ["SPS, Shopify", ""],
+      "Sample — Northwind Parcel": ["NetSuite", "UPS direct"]
+    }[item.name];
+    if (known) {
+      kickoff.marketplaces = known[0];
+      kickoff.carriers = known[1];
+      kickoff.integrations = "";
+    }
+  }
 }
 
 function samples() {
@@ -117,14 +139,14 @@ function samples() {
       sample: true,
       name: "Sample — Atlas Fulfillment",
       engineer: "Sample engineer",
-      kickoff: { date: "2026-09-02", goLive: "2026-11-18", warehouses: "1", clients: "5", volume: "500 orders/day", integrations: "Shopify now; NetSuite later", notes: "Executive sponsor attended discovery. Payment follow-up is open." },
+      kickoff: { date: "2026-09-02", goLive: "2026-11-18", warehouses: "1", clients: "5", volume: "500 orders/day", marketplaces: "Shopify now; NetSuite later", carriers: "", notes: "Executive sponsor attended discovery. Payment follow-up is open." },
       phases: { early: answers({ stakeholder: 5, expectations: 5, ownership: 5, timeline: 5, change: 5, it: 5, fit: 5, payment: 3 }) }
     }),
     customer({
       sample: true,
       name: "Sample — Cedar Warehouse",
       engineer: "Sample engineer",
-      kickoff: { date: "2026-07-14", goLive: "2026-10-02", warehouses: "2", clients: "8", volume: "1,200 shipments/day", integrations: "SPS, Shopify", notes: "UAT is active. Go-live has already moved." },
+      kickoff: { date: "2026-07-14", goLive: "2026-10-02", warehouses: "2", clients: "8", volume: "1,200 shipments/day", marketplaces: "SPS, Shopify", carriers: "", notes: "UAT is active. Go-live has already moved." },
       phases: {
         early: answers({ stakeholder: 5, expectations: 3, ownership: 5, timeline: 3, change: 5, it: 3, fit: 5, payment: 5 }),
         activation: answers({ stakeholder: 3, ownership: 5, integration: 3, payment: 5, training: 3, uat: 3, adaption: 3, ontime: 1 }, { ontime: "9", uat: "70", training: "2", integration: "72" })
@@ -134,7 +156,7 @@ function samples() {
       sample: true,
       name: "Sample — Northwind Parcel",
       engineer: "Sample engineer",
-      kickoff: { date: "2026-05-20", goLive: "2026-08-01", warehouses: "1", clients: "3", volume: "800 shipments/day", integrations: "NetSuite, UPS direct", notes: "Volume is below the kickoff baseline and Sev1 tickets are open." },
+      kickoff: { date: "2026-05-20", goLive: "2026-08-01", warehouses: "1", clients: "3", volume: "800 shipments/day", marketplaces: "NetSuite", carriers: "UPS direct", notes: "Volume is below the kickoff baseline and Sev1 tickets are open." },
       phases: {
         early: answers({ stakeholder: 5, expectations: 5, ownership: 5, timeline: 5, change: 3, it: 5, fit: 5, payment: 5 }),
         activation: answers({ stakeholder: 5, ownership: 5, integration: 5, payment: 5, training: 5, uat: 5, adaption: 5, ontime: 5 }),
@@ -157,7 +179,7 @@ function customer(seed) {
     name: seed.name || "",
     engineer: seed.engineer || "",
     kickoff: {
-      date: "", goLive: "", warehouses: "", clients: "", volume: "", integrations: "", notes: "",
+      date: "", goLive: "", warehouses: "", clients: "", volume: "", marketplaces: "", carriers: "", integrations: "", notes: "",
       ...(seed.kickoff || {})
     },
     phases
@@ -381,7 +403,8 @@ function newView() {
         <label>Customer name<input class="text" name="name" required placeholder="Customer name" /></label>
         <label>Implementation engineer<input class="text" name="engineer" placeholder="Engineer name" /></label>
         <label>Expected volume from kickoff or contract<input class="text" name="volume" placeholder="Example: 500 orders/day" /></label>
-        <label>Integrations in scope<input class="text" name="integrations" placeholder="Example: Shopify, SPS" /></label>
+        <label>Marketplace integrations<input class="text" name="marketplaces" placeholder="Shopify, Amazon, SPS, NetSuite" /></label>
+        <label>Carrier integrations<input class="text" name="carriers" placeholder="UPS, FedEx, USPS, ShipStation" /></label>
         <button class="btn primary" type="submit">Create and start Early Churn</button>
       </form>
     </main>`;
@@ -410,7 +433,11 @@ function customerView(current) {
         ${field("Warehouses", "warehouses", item.kickoff.warehouses, "text", true)}
         ${field("Clients", "clients", item.kickoff.clients, "text", true)}
         ${field("Expected volume", "volume", item.kickoff.volume, "text", true)}
-        <label class="span-3">Integrations in scope<input class="text" data-kickoff="integrations" value="${esc(item.kickoff.integrations)}" /></label>
+        <div class="pair">
+          <label>Marketplace integrations<input class="text" data-kickoff="marketplaces" value="${esc(item.kickoff.marketplaces)}" placeholder="Shopify, Amazon, SPS, NetSuite" /></label>
+          <label>Carrier integrations<input class="text" data-kickoff="carriers" value="${esc(item.kickoff.carriers)}" placeholder="UPS, FedEx, USPS, ShipStation" /></label>
+        </div>
+        ${item.kickoff.integrations ? `<p class="hint span-3">Earlier combined list: ${esc(item.kickoff.integrations)}. Move each name into marketplace or carrier above.</p>` : ""}
         <label class="span-3">Kickoff notes<textarea data-kickoff="notes">${esc(item.kickoff.notes)}</textarea></label>
       </section>
       <nav class="tabs">${PHASES.map((itemPhase) => tab(item, itemPhase, phase.id)).join("")}</nav>
@@ -602,7 +629,11 @@ document.body.addEventListener("submit", (event) => {
   const item = customer({
     name: String(data.get("name") || "").trim(),
     engineer: String(data.get("engineer") || "").trim(),
-    kickoff: { volume: String(data.get("volume") || ""), integrations: String(data.get("integrations") || "") }
+    kickoff: {
+      volume: String(data.get("volume") || ""),
+      marketplaces: String(data.get("marketplaces") || ""),
+      carriers: String(data.get("carriers") || "")
+    }
   });
   if (!item.name) return;
   item.phases.early.assessor = item.engineer;
