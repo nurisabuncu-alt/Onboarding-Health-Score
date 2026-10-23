@@ -96,7 +96,6 @@ const PHASES = [
 ];
 
 const ui = { q: "", risk: "all" };
-let state = load();
 
 function load() {
   let loaded;
@@ -113,25 +112,172 @@ function load() {
   return loaded;
 }
 
+const MARKETPLACES = [
+  { group: "Marketplace", name: "Amazon FBM", aliases: ["amazon fbm","amazonfbm","fbm","fulfillment by merchant"] },
+  { group: "Marketplace", name: "Amazon Seller Central", aliases: ["amazon seller central","amazonsellercentral","amazon seller","seller central","amazon"] },
+  { group: "Marketplace", name: "Amazon SFP", aliases: ["amazon sfp","amazonsfp","sfp","seller fulfilled prime"] },
+  { group: "Marketplace", name: "Bed, Bath and Beyond", aliases: ["bed, bath and beyond","bed bath and beyond","bedbathandbeyond"] },
+  { group: "Marketplace", name: "BestBuy", aliases: ["bestbuy"] },
+  { group: "Marketplace", name: "Ebay", aliases: ["ebay","e-bay"] },
+  { group: "Marketplace", name: "Faire", aliases: ["faire"] },
+  { group: "Marketplace", name: "Logicbroker", aliases: ["logicbroker"] },
+  { group: "Marketplace", name: "Magento", aliases: ["magento"], note: "Not on the public site" },
+  { group: "Marketplace", name: "Magento 2", aliases: ["magento 2","magento2"] },
+  { group: "Marketplace", name: "Mirakl", aliases: ["mirakl"] },
+  { group: "Marketplace", name: "Target Plus", aliases: ["target plus","targetplus"] },
+  { group: "Marketplace", name: "Tik Tok Shop", aliases: ["tik tok shop","tiktokshop","tiktok","tik tok","tiktok shop"] },
+  { group: "Marketplace", name: "Walmart DSV", aliases: ["walmart dsv","walmartdsv"] },
+  { group: "Marketplace", name: "Walmart Marketplace", aliases: ["walmart marketplace","walmartmarketplace","walmart"] },
+  { group: "Ecommerce", name: "Acenda", aliases: ["acenda"] },
+  { group: "Ecommerce", name: "Amazon Vendor Central", aliases: ["amazon vendor central","amazonvendorcentral","vendor central","amazon vendor"] },
+  { group: "Ecommerce", name: "BigCommerce", aliases: ["bigcommerce","big commerce"] },
+  { group: "Ecommerce", name: "BJ’s Wholesale Club (Rithum)", aliases: ["bj’s wholesale club (rithum)","bj’s wholesale club","bj s wholesale club","bjswholesaleclub"] },
+  { group: "Ecommerce", name: "Blastramp", aliases: ["blastramp"] },
+  { group: "Ecommerce", name: "Brightpearl", aliases: ["brightpearl"] },
+  { group: "Ecommerce", name: "Channel Advisor (Rithum)", aliases: ["channel advisor (rithum)","channel advisor","channeladvisor"] },
+  { group: "Ecommerce", name: "Costco Wholesale (Rithum)", aliases: ["costco wholesale (rithum)","costco wholesale","costcowholesale"] },
+  { group: "Ecommerce", name: "Etsy", aliases: ["etsy"] },
+  { group: "Ecommerce", name: "Home Depot", aliases: ["home depot","homedepot"] },
+  { group: "Ecommerce", name: "Hot Topic (Rithum)", aliases: ["hot topic (rithum)","hot topic","hottopic"] },
+  { group: "Ecommerce", name: "JOOR", aliases: ["joor"] },
+  { group: "Ecommerce", name: "Lowes", aliases: ["lowes"] },
+  { group: "Ecommerce", name: "Macy’s (Rithum)", aliases: ["macy’s (rithum)","macy’s","macy s","macys"] },
+  { group: "Ecommerce", name: "Nordstrom", aliases: ["nordstrom"] },
+  { group: "Ecommerce", name: "OrderDesk", aliases: ["orderdesk"], note: "Not on the public site" },
+  { group: "Ecommerce", name: "Overstock", aliases: ["overstock"] },
+  { group: "Ecommerce", name: "QVC", aliases: ["qvc"] },
+  { group: "Ecommerce", name: "Sears", aliases: ["sears"] },
+  { group: "Ecommerce", name: "Shopify", aliases: ["shopify"] },
+  { group: "Ecommerce", name: "Square", aliases: ["square"] },
+  { group: "Ecommerce", name: "Squarespace", aliases: ["squarespace"], note: "Not on the public site" },
+  { group: "Ecommerce", name: "Target", aliases: ["target"] },
+  { group: "Ecommerce", name: "TechOMS", aliases: ["techoms"], note: "Not on the public site" },
+  { group: "Ecommerce", name: "Temu", aliases: ["temu"] },
+  { group: "Ecommerce", name: "VTex", aliases: ["vtex"] },
+  { group: "Ecommerce", name: "Walmart V3", aliases: ["walmart v3","walmartv3"] },
+  { group: "Ecommerce", name: "Wayfair", aliases: ["wayfair"] },
+  { group: "Ecommerce", name: "Wish", aliases: ["wish"] },
+  { group: "Ecommerce", name: "Wix", aliases: ["wix"] },
+  { group: "Ecommerce", name: "WooCommerce", aliases: ["woocommerce","woo commerce"] },
+  { group: "EDI", name: "CommerceHub (Rithum)", aliases: ["commercehub (rithum)","commercehub","commerce hub"] },
+  { group: "EDI", name: "Orderful", aliases: ["orderful"] },
+  { group: "EDI", name: "SPS Commerce", aliases: ["sps commerce","spscommerce","sps"] },
+  { group: "EDI", name: "True Commerce", aliases: ["true commerce","truecommerce"] },
+  { group: "ERP", name: "Acumatica", aliases: ["acumatica"] },
+  { group: "ERP", name: "Apparel Magic", aliases: ["apparel magic","apparelmagic"], note: "Not on the public site" },
+  { group: "ERP", name: "Cin7 Core", aliases: ["cin7 core","cin7core","cin7","cin 7"] },
+  { group: "ERP", name: "Microsoft Dynamics 365", aliases: ["microsoft dynamics 365","microsoftdynamics365","dynamics 365","microsoft dynamics","dynamics"] },
+  { group: "ERP", name: "NetSuite", aliases: ["netsuite"] },
+  { group: "ERP", name: "NewEgg", aliases: ["newegg"] },
+  { group: "ERP", name: "Odoo", aliases: ["odoo"] },
+  { group: "ERP", name: "Odoo 17", aliases: ["odoo 17","odoo17"] },
+  { group: "ERP", name: "Quickbooks Online", aliases: ["quickbooks online","quickbooksonline","quickbooks","qbo"] },
+  { group: "ERP", name: "Sage Intacct", aliases: ["sage intacct","sageintacct"] },
+  { group: "ERP", name: "SAP", aliases: ["sap"] },
+  { group: "CRM", name: "HubSpot", aliases: ["hubspot"] },
+  { group: "CRM", name: "Salesforce", aliases: ["salesforce"] },
+  { group: "CRM", name: "Zoho", aliases: ["zoho"] },
+  { group: "Returns", name: "Loop Returns", aliases: ["loop returns","loopreturns"] },
+  { group: "Other", name: "Cartrover", aliases: ["cartrover","cart rover"] }
+];
+
+const CARRIERS = [
+  { group: "Pre-built", name: "Amazon Buy Shipping", aliases: ["amazon buy shipping","amazonbuyshipping","buy shipping"] },
+  { group: "Pre-built", name: "Amazon Vendor Shipping", aliases: ["amazon vendor shipping","amazonvendorshipping","vendor shipping"] },
+  { group: "Pre-built", name: "BukuShip", aliases: ["bukuship","buku"] },
+  { group: "Pre-built", name: "EasyPost", aliases: ["easypost","easy post"] },
+  { group: "Pre-built", name: "eHub", aliases: ["ehub","e-hub"] },
+  { group: "Pre-built", name: "eShipper", aliases: ["eshipper"] },
+  { group: "Pre-built", name: "FedEx", aliases: ["fedex","fed ex"] },
+  { group: "Pre-built", name: "iDriveLogistics", aliases: ["idrivelogistics","idrive","idrive logistics"] },
+  { group: "Pre-built", name: "Shipium", aliases: ["shipium"] },
+  { group: "Pre-built", name: "Shippo", aliases: ["shippo"] },
+  { group: "Pre-built", name: "ShipStation", aliases: ["shipstation","ship station"] },
+  { group: "Pre-built", name: "Stamps.com", aliases: ["stamps.com","stamps com","stampscom","stamps"] },
+  { group: "Pre-built", name: "TechShip", aliases: ["techship","tech ship"] },
+  { group: "Pre-built", name: "UPS", aliases: ["ups"] },
+  { group: "Pre-built", name: "Veeqo", aliases: ["veeqo"] },
+  { group: "Partner", name: "Walmart Canada", aliases: ["walmart canada","walmartcanada"] }
+];
+
+const EXTRA_SYSTEMS = [];
+
+const CATALOGS = { marketplaces: MARKETPLACES, carriers: CARRIERS };
+
+function escapeReg(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function uniqueNames(list) {
+  const out = [];
+  list.forEach((name) => {
+    const clean = String(name || "").replace(/\s+/g, " ").trim();
+    if (!clean || out.some((item) => item.toLowerCase() === clean.toLowerCase())) return;
+    out.push(clean);
+  });
+  return out;
+}
+
+function matchCatalog(text, catalog) {
+  const source = String(text || "");
+  const lower = source.toLowerCase();
+  const pairs = [];
+  catalog.forEach((item) => item.aliases.forEach((alias) => pairs.push({ item, alias: alias.toLowerCase() })));
+  pairs.sort((a, b) => b.alias.length - a.alias.length);
+  const claimed = [];
+  const found = [];
+  pairs.forEach(({ item, alias }) => {
+    const re = new RegExp(`(^|[^a-z0-9])${escapeReg(alias)}(?=[^a-z0-9]|$)`, "ig");
+    let match;
+    while ((match = re.exec(lower))) {
+      const start = match.index + match[1].length;
+      const end = start + alias.length;
+      if (claimed.some((span) => start < span.end && end > span.start)) continue;
+      claimed.push({ start, end });
+      if (!found.includes(item.name)) found.push(item.name);
+      break;
+    }
+  });
+  return found;
+}
+
+function matchSystems(text, catalog) {
+  return uniqueNames(matchCatalog(text, catalog).concat(matchCatalog(text, EXTRA_SYSTEMS)));
+}
+
+function canonicalizeList(value, catalog) {
+  if (Array.isArray(value)) {
+    return uniqueNames(value.flatMap((item) => {
+      const matched = matchSystems(item, catalog);
+      return matched.length ? matched : [item];
+    }));
+  }
+  const text = String(value || "").trim();
+  if (!text) return [];
+  const matched = matchSystems(text, catalog);
+  return matched.length ? matched : [text];
+}
+
 function normalizeCustomer(item) {
   item.kickoff = item.kickoff || {};
   const kickoff = item.kickoff;
-  if (kickoff.marketplaces == null) kickoff.marketplaces = "";
-  if (kickoff.carriers == null) kickoff.carriers = "";
+  ["date", "goLive", "warehouses", "users", "clients", "apiUsers", "volume", "notes"].forEach((key) => {
+    if (kickoff[key] == null) kickoff[key] = "";
+  });
   if (kickoff.integrations == null) kickoff.integrations = "";
-  if (item.sample && !kickoff.marketplaces && !kickoff.carriers && kickoff.integrations) {
-    const known = {
-      "Sample — Atlas Fulfillment": ["Shopify now; NetSuite later", ""],
-      "Sample — Cedar Warehouse": ["SPS, Shopify", ""],
-      "Sample — Northwind Parcel": ["NetSuite", "UPS direct"]
-    }[item.name];
-    if (known) {
-      kickoff.marketplaces = known[0];
-      kickoff.carriers = known[1];
-      kickoff.integrations = "";
-    }
+  const marketsBlank = !canonicalizeList(kickoff.marketplaces, MARKETPLACES).length && !String(kickoff.marketplaces || "").trim();
+  const carriersBlank = !canonicalizeList(kickoff.carriers, CARRIERS).length && !String(kickoff.carriers || "").trim();
+  if (marketsBlank && carriersBlank && String(kickoff.integrations || "").trim()) {
+    kickoff.marketplaces = matchSystems(kickoff.integrations, MARKETPLACES);
+    kickoff.carriers = matchSystems(kickoff.integrations, CARRIERS);
+    if (kickoff.marketplaces.length || kickoff.carriers.length) kickoff.integrations = "";
+  } else {
+    kickoff.marketplaces = canonicalizeList(kickoff.marketplaces, MARKETPLACES);
+    kickoff.carriers = canonicalizeList(kickoff.carriers, CARRIERS);
   }
 }
+
+let state = load();
 
 function samples() {
   return [
@@ -139,14 +285,14 @@ function samples() {
       sample: true,
       name: "Sample — Atlas Fulfillment",
       engineer: "Sample engineer",
-      kickoff: { date: "2026-09-02", goLive: "2026-11-18", warehouses: "1", clients: "5", volume: "500 orders/day", marketplaces: "Shopify now; NetSuite later", carriers: "", notes: "Executive sponsor attended discovery. Payment follow-up is open." },
+      kickoff: { date: "2026-09-02", goLive: "2026-11-18", warehouses: "1", users: "20", clients: "5", apiUsers: "2", volume: "500 orders/day", marketplaces: ["Shopify", "NetSuite"], carriers: [], notes: "Executive sponsor attended discovery. Payment follow-up is open." },
       phases: { early: answers({ stakeholder: 5, expectations: 5, ownership: 5, timeline: 5, change: 5, it: 5, fit: 5, payment: 3 }) }
     }),
     customer({
       sample: true,
       name: "Sample — Cedar Warehouse",
       engineer: "Sample engineer",
-      kickoff: { date: "2026-07-14", goLive: "2026-10-02", warehouses: "2", clients: "8", volume: "1,200 shipments/day", marketplaces: "SPS, Shopify", carriers: "", notes: "UAT is active. Go-live has already moved." },
+      kickoff: { date: "2026-07-14", goLive: "2026-10-02", warehouses: "2", users: "12", clients: "8", apiUsers: "1", volume: "1,200 shipments/day", marketplaces: ["SPS Commerce", "Shopify"], carriers: ["UPS", "FedEx"], notes: "UAT is active. Go-live has already moved." },
       phases: {
         early: answers({ stakeholder: 5, expectations: 3, ownership: 5, timeline: 3, change: 5, it: 3, fit: 5, payment: 5 }),
         activation: answers({ stakeholder: 3, ownership: 5, integration: 3, payment: 5, training: 3, uat: 3, adaption: 3, ontime: 1 }, { ontime: "9", uat: "70", training: "2", integration: "72" })
@@ -156,7 +302,7 @@ function samples() {
       sample: true,
       name: "Sample — Northwind Parcel",
       engineer: "Sample engineer",
-      kickoff: { date: "2026-05-20", goLive: "2026-08-01", warehouses: "1", clients: "3", volume: "800 shipments/day", marketplaces: "NetSuite", carriers: "UPS direct", notes: "Volume is below the kickoff baseline and Sev1 tickets are open." },
+      kickoff: { date: "2026-05-20", goLive: "2026-08-01", warehouses: "1", users: "8", clients: "3", apiUsers: "1", volume: "800 shipments/day", marketplaces: ["NetSuite"], carriers: ["UPS"], notes: "Volume is below the kickoff baseline and Sev1 tickets are open." },
       phases: {
         early: answers({ stakeholder: 5, expectations: 5, ownership: 5, timeline: 5, change: 3, it: 5, fit: 5, payment: 5 }),
         activation: answers({ stakeholder: 5, ownership: 5, integration: 5, payment: 5, training: 5, uat: 5, adaption: 5, ontime: 5 }),
@@ -179,7 +325,7 @@ function customer(seed) {
     name: seed.name || "",
     engineer: seed.engineer || "",
     kickoff: {
-      date: "", goLive: "", warehouses: "", clients: "", volume: "", marketplaces: "", carriers: "", integrations: "", notes: "",
+      date: "", goLive: "", warehouses: "", users: "", clients: "", apiUsers: "", volume: "", marketplaces: [], carriers: [], integrations: "", notes: "",
       ...(seed.kickoff || {})
     },
     phases
@@ -400,11 +546,21 @@ function newView() {
       <a class="back" href="#/">Back to dashboard</a>
       <form class="card form-card form-grid" id="new-form" style="margin-top:12px">
         <h2>New customer</h2>
+        ${kickoffImportRow()}
         <label>Customer name<input class="text" name="name" required placeholder="Customer name" /></label>
         <label>Implementation engineer<input class="text" name="engineer" placeholder="Engineer name" /></label>
-        <label>Expected volume from kickoff or contract<input class="text" name="volume" placeholder="Example: 500 orders/day" /></label>
-        <label>Marketplace integrations<input class="text" name="marketplaces" placeholder="Shopify, Amazon, SPS, NetSuite" /></label>
-        <label>Carrier integrations<input class="text" name="carriers" placeholder="UPS, FedEx, USPS, ShipStation" /></label>
+        <div class="pair">
+          <label>Warehouses<input class="text" name="warehouses" /></label>
+          <label>Users<input class="text" name="users" /></label>
+        </div>
+        <label>Clients<textarea name="clients"></textarea></label>
+        <div class="pair">
+          <label>API users<input class="text" name="apiUsers" /></label>
+          <label>Expected volume from kickoff or contract<input class="text" name="volume" placeholder="Example: 500 orders/day" /></label>
+        </div>
+        ${comboHtml("marketplaces", "Marketplace integrations", [], "Search Shopify, Amazon, SPS, NetSuite")}
+        ${comboHtml("carriers", "Carrier integrations", [], "Search UPS, FedEx, USPS, ShipStation")}
+        <label>Kickoff notes<textarea name="notes"></textarea></label>
         <button class="btn primary" type="submit">Create and start Early Churn</button>
       </form>
     </main>`;
@@ -427,15 +583,18 @@ function customerView(current) {
         <button class="btn quiet" data-action="delete" data-id="${esc(item.id)}">Delete customer</button>
       </div>
       <section class="card kickoff">
+        ${kickoffImportRow()}
         ${field("Engineer", "engineer", item.engineer, "text")}
         ${field("Kickoff date", "date", item.kickoff.date, "date", true)}
         ${field("Target activation", "goLive", item.kickoff.goLive, "date", true)}
         ${field("Warehouses", "warehouses", item.kickoff.warehouses, "text", true)}
-        ${field("Clients", "clients", item.kickoff.clients, "text", true)}
+        ${field("Users", "users", item.kickoff.users, "text", true)}
+        ${field("API users", "apiUsers", item.kickoff.apiUsers, "text", true)}
         ${field("Expected volume", "volume", item.kickoff.volume, "text", true)}
+        <label class="span-3">Clients<textarea data-kickoff="clients">${esc(item.kickoff.clients)}</textarea></label>
         <div class="pair">
-          <label>Marketplace integrations<input class="text" data-kickoff="marketplaces" value="${esc(item.kickoff.marketplaces)}" placeholder="Shopify, Amazon, SPS, NetSuite" /></label>
-          <label>Carrier integrations<input class="text" data-kickoff="carriers" value="${esc(item.kickoff.carriers)}" placeholder="UPS, FedEx, USPS, ShipStation" /></label>
+          ${comboHtml("marketplaces", "Marketplace integrations", item.kickoff.marketplaces, "Search Shopify, Amazon, SPS, NetSuite")}
+          ${comboHtml("carriers", "Carrier integrations", item.kickoff.carriers, "Search UPS, FedEx, USPS, ShipStation")}
         </div>
         ${item.kickoff.integrations ? `<p class="hint span-3">Earlier combined list: ${esc(item.kickoff.integrations)}. Move each name into marketplace or carrier above.</p>` : ""}
         <label class="span-3">Kickoff notes<textarea data-kickoff="notes">${esc(item.kickoff.notes)}</textarea></label>
@@ -451,6 +610,221 @@ function customerView(current) {
 function field(label, key, value, type, kickoff) {
   const attr = kickoff ? `data-kickoff="${key}"` : `data-field="${key}"`;
   return `<label>${esc(label)}<input class="text" type="${type}" ${attr} value="${esc(value)}" /></label>`;
+}
+
+function kickoffImportRow() {
+  return `<div class="import-row"><label class="btn file-btn">Import kickoff Excel<input type="file" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-kickoff-file /></label><p class="hint" data-import-status>Reads the Project Details and Integration sections of the kickoff workbook.</p></div>`;
+}
+
+function comboHtml(key, label, selected, placeholder) {
+  const names = Array.isArray(selected) ? selected : canonicalizeList(selected, CATALOGS[key]);
+  return `<div class="combo" data-combo="${esc(key)}" data-selected="${esc(JSON.stringify(names))}" data-placeholder="${esc(placeholder)}">
+    <span class="combo-label">${esc(label)}</span>
+    <div class="combo-anchor">
+      <div class="combo-control">${names.map((name) => tagHtml(name)).join("")}<input class="combo-search" data-combo-search type="text" placeholder="${esc(names.length ? "Add another" : placeholder)}" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" /></div>
+      <div class="combo-menu" data-combo-menu hidden></div>
+    </div>
+    <p class="hint combo-hint">From the Logiwa integrations list. Select every connection that applies, or add a name that is not listed.</p>
+  </div>`;
+}
+
+function tagHtml(name) {
+  return `<button type="button" class="tag" data-remove="${esc(name)}">${esc(name)}<span aria-hidden="true">×</span></button>`;
+}
+
+function readSelected(combo) {
+  try { return JSON.parse(combo.dataset.selected || "[]"); }
+  catch (err) { return []; }
+}
+
+function writeSelected(combo, names) {
+  const selected = uniqueNames(names);
+  combo.dataset.selected = JSON.stringify(selected);
+  const control = combo.querySelector(".combo-control");
+  const search = combo.querySelector("[data-combo-search]");
+  control.querySelectorAll(".tag").forEach((tag) => tag.remove());
+  selected.forEach((name) => search.insertAdjacentHTML("beforebegin", tagHtml(name)));
+  search.placeholder = selected.length ? "Add another" : combo.dataset.placeholder;
+  const found = currentCustomer();
+  if (found) {
+    found.item.kickoff[combo.dataset.combo] = selected;
+    save();
+  }
+}
+
+function renderMenu(combo, query) {
+  const catalog = CATALOGS[combo.dataset.combo] || [];
+  const selected = readSelected(combo);
+  const q = String(query || "").trim().toLowerCase();
+  const matches = catalog.filter((item) => !q || item.name.toLowerCase().includes(q) || item.aliases.some((alias) => alias.includes(q)) || item.group.toLowerCase().includes(q));
+  const groups = [];
+  matches.forEach((item) => {
+    let bucket = groups.find((group) => group.name === item.group);
+    if (!bucket) {
+      bucket = { name: item.group, items: [] };
+      groups.push(bucket);
+    }
+    bucket.items.push(item);
+  });
+  let html = groups.map((group) => `<div class="combo-group"><p>${esc(group.name)}</p>${group.items.map((item) => {
+    const on = selected.some((name) => name.toLowerCase() === item.name.toLowerCase());
+    return `<button type="button" class="combo-option${on ? " on" : ""}" data-option="${esc(item.name)}" role="option" aria-selected="${on}"><span>${esc(item.name)}${item.note ? `<small>${esc(item.note)}</small>` : ""}</span>${on ? "<em>Selected</em>" : ""}</button>`;
+  }).join("")}</div>`).join("");
+  const exact = catalog.some((item) => item.name.toLowerCase() === q) || selected.some((name) => name.toLowerCase() === q);
+  if (q && !exact) html += `<button type="button" class="combo-option" data-add-custom="${esc(query.trim())}">Add “${esc(query.trim())}”</button>`;
+  const menu = combo.querySelector("[data-combo-menu]");
+  menu.innerHTML = html || `<p class="combo-empty">No matching Logiwa integration.</p>`;
+  menu.hidden = false;
+  combo.querySelector("[data-combo-search]").setAttribute("aria-expanded", "true");
+}
+
+function closeMenus(except) {
+  document.querySelectorAll("[data-combo-menu]").forEach((menu) => {
+    if (except && menu.closest("[data-combo]") === except) return;
+    menu.hidden = true;
+    const search = menu.closest("[data-combo]").querySelector("[data-combo-search]");
+    if (search) search.setAttribute("aria-expanded", "false");
+  });
+}
+
+function parseKickoffSheet(workbook) {
+  let found = null;
+  workbook.SheetNames.some((name) => {
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: "", raw: false });
+    found = parseKickoffRows(rows);
+    return !!found;
+  });
+  if (!found) throw new Error("This workbook does not have Project Details or Integration answers. Use the kickoff sheet with Topic, Questions, and Answer columns.");
+  return found;
+}
+
+function parseKickoffRows(rows) {
+  let header = -1;
+  let topicCol = 0;
+  let questionCol = 0;
+  let answerCol = 0;
+  for (let index = 0; index < Math.min(rows.length, 20); index += 1) {
+    const row = (rows[index] || []).map((cell) => String(cell || "").trim().toLowerCase());
+    const topic = row.findIndex((cell) => cell === "topic");
+    const question = row.findIndex((cell) => cell === "question" || cell === "questions");
+    const answer = row.findIndex((cell) => cell === "answer" || cell === "answers");
+    if (topic >= 0 && question >= 0 && answer >= 0) {
+      header = index;
+      topicCol = topic;
+      questionCol = question;
+      answerCol = answer;
+      break;
+    }
+  }
+  if (header < 0) return null;
+  let topic = "";
+  const details = [];
+  const integrations = [];
+  for (let index = header + 1; index < rows.length; index += 1) {
+    const row = rows[index] || [];
+    const topicCell = String(row[topicCol] || "").trim();
+    if (topicCell) topic = topicCell;
+    const question = String(row[questionCol] || "").trim();
+    const answer = String(row[answerCol] || "").trim();
+    if (!question && !answer) continue;
+    if (/project detail/i.test(topic)) details.push({ question, answer });
+    else if (/^integration$/i.test(topic)) integrations.push({ question, answer });
+  }
+  if (!details.length && !integrations.length) return null;
+  return { details, integrations };
+}
+
+function applyKickoff(parsed, kickoff) {
+  const lines = [];
+  parsed.details.forEach(({ question, answer }) => {
+    if (!answer) return;
+    if (/warehouse/i.test(question)) kickoff.warehouses = answer;
+    else if (/api\s*user/i.test(question)) kickoff.apiUsers = answer;
+    else if (/\buser/i.test(question)) kickoff.users = answer;
+    else if (/client/i.test(question)) kickoff.clients = answer;
+    lines.push(`${question}\n${answer}`);
+  });
+  let storeText = "";
+  let carrierText = "";
+  parsed.integrations.forEach(({ question, answer }) => {
+    if (/endpoint/i.test(question)) {
+      if (answer) lines.push(`${question}\n${answer}`);
+      return;
+    }
+    if (/carrier/i.test(question)) {
+      carrierText = [carrierText, answer].filter(Boolean).join("\n");
+      if (answer) lines.push(`${question}\n${answer}`);
+      return;
+    }
+    if (/store|shop|marketplace|channel|integrat/i.test(question)) {
+      storeText = [storeText, answer].filter(Boolean).join("\n");
+      if (answer) lines.push(`${question}\n${answer}`);
+    }
+  });
+  if (storeText) kickoff.marketplaces = matchSystems(storeText, MARKETPLACES);
+  if (carrierText) {
+    kickoff.carriers = matchSystems(carrierText, CARRIERS);
+    if (/\busps\b/i.test(carrierText) && !kickoff.carriers.some((name) => /stamps|usps|endicia/i.test(name))) kickoff.carriers.push("USPS");
+    if (/\bendicia\b/i.test(carrierText) && !kickoff.carriers.some((name) => /endicia/i.test(name))) kickoff.carriers.push("Endicia");
+  }
+  if (lines.length) {
+    const marker = "Imported from kickoff Excel";
+    const before = String(kickoff.notes || "").split(marker)[0].trim();
+    kickoff.notes = `${before ? `${before}\n\n` : ""}${marker}\n${lines.join("\n\n")}`;
+  }
+  const parts = [];
+  if (kickoff.warehouses) parts.push(countPhrase(kickoff.warehouses, "warehouse", "warehouses"));
+  if (kickoff.users) parts.push(countPhrase(kickoff.users, "user", "users"));
+  if (kickoff.apiUsers) parts.push(countPhrase(kickoff.apiUsers, "API user", "API users"));
+  if (kickoff.clients) parts.push("clients captured");
+  if (kickoff.marketplaces.length) parts.push(`marketplaces: ${kickoff.marketplaces.join(", ")}`);
+  if (kickoff.carriers.length) parts.push(`carriers: ${kickoff.carriers.join(", ")}`);
+  return parts.length ? `Imported kickoff · ${parts.join(" · ")}` : "No Project Details or Integration answers were found in that workbook.";
+}
+
+function countPhrase(answer, singular, plural) {
+  const text = String(answer || "").trim();
+  if (/^\d+$/.test(text)) return `${text} ${Number(text) === 1 ? singular : plural}`;
+  return `${plural}: ${text}`;
+}
+
+function readKickoffFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const status = () => document.querySelector("[data-import-status]");
+    try {
+      if (typeof XLSX === "undefined") throw new Error("The Excel reader did not load. Refresh the page and try again.");
+      const workbook = XLSX.read(new Uint8Array(reader.result), { type: "array" });
+      const parsed = parseKickoffSheet(workbook);
+      const found = currentCustomer();
+      if (found) {
+        const summary = applyKickoff(parsed, found.item.kickoff);
+        save();
+        render();
+        const line = status();
+        if (line) line.textContent = summary;
+        return;
+      }
+      const draft = { warehouses: "", users: "", clients: "", apiUsers: "", notes: "", marketplaces: [], carriers: [] };
+      const form = document.getElementById("new-form");
+      if (form) draft.notes = String(new FormData(form).get("notes") || "");
+      const summary = applyKickoff(parsed, draft);
+      ["warehouses", "users", "clients", "apiUsers", "notes"].forEach((key) => {
+        const input = form && form.querySelector(`[name="${key}"]`);
+        if (input) input.value = draft[key] || "";
+      });
+      ["marketplaces", "carriers"].forEach((key) => {
+        const combo = form && form.querySelector(`[data-combo="${key}"]`);
+        if (combo) writeSelected(combo, draft[key]);
+      });
+      const line = status();
+      if (line) line.textContent = summary;
+    } catch (err) {
+      const line = status();
+      if (line) line.textContent = err.message || "That workbook could not be read.";
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 function tab(item, phase, active) {
@@ -498,7 +872,7 @@ function railHtml(item, phase, result) {
 }
 
 function shell(lede) {
-  return `<header class="app-header"><div class="header-inner header-row"><div><p class="eyebrow">Professional Services</p><h1>Onboarding Health Score</h1><p class="lede">${esc(lede)}</p></div><div class="header-actions"><a class="btn" href="#/">Dashboard</a><a class="btn primary" href="#/new">New customer</a><button class="btn" data-action="export">Export</button><label class="btn file-btn">Import<input id="import-file" type="file" accept="application/json" /></label></div></div></header>`;
+  return `<header class="app-header"><div class="header-inner header-row"><div><p class="eyebrow">Professional Services</p><h1>Onboarding Health Score</h1><p class="lede">${esc(lede)}</p></div><div class="header-actions"><a class="btn" href="#/">Dashboard</a><a class="btn primary" href="#/new">New customer</a><button class="btn" data-action="export">Export</button><label class="btn file-btn">Import JSON<input id="import-file" type="file" accept="application/json" /></label></div></div></header>`;
 }
 
 function touch(item, phaseId) {
@@ -527,6 +901,27 @@ function currentCustomer() {
 }
 
 document.body.addEventListener("click", (event) => {
+  const searchField = event.target.closest("[data-combo-search]");
+  if (searchField) renderMenu(searchField.closest("[data-combo]"), searchField.value);
+  const option = event.target.closest("[data-option], [data-add-custom], [data-remove]");
+  if (option) {
+    event.preventDefault();
+    const combo = option.closest("[data-combo]");
+    const selected = readSelected(combo);
+    if (option.dataset.remove) writeSelected(combo, selected.filter((name) => name !== option.dataset.remove));
+    if (option.dataset.option) {
+      const name = option.dataset.option;
+      const has = selected.some((item) => item.toLowerCase() === name.toLowerCase());
+      writeSelected(combo, has ? selected.filter((item) => item.toLowerCase() !== name.toLowerCase()) : selected.concat(name));
+    }
+    if (option.dataset.addCustom) writeSelected(combo, selected.concat(option.dataset.addCustom));
+    const search = combo.querySelector("[data-combo-search]");
+    if (option.dataset.option || option.dataset.addCustom) search.value = "";
+    renderMenu(combo, search.value);
+    search.focus();
+    return;
+  }
+  if (!event.target.closest("[data-combo]")) closeMenus();
   const target = event.target.closest("[data-action]");
   if (!target) return;
   const action = target.dataset.action;
@@ -575,8 +970,46 @@ document.body.addEventListener("click", (event) => {
   }
 });
 
+document.body.addEventListener("keydown", (event) => {
+  if (!event.target.matches || !event.target.matches("[data-combo-search]")) return;
+  const combo = event.target.closest("[data-combo]");
+  if (event.key === "Escape") {
+    closeMenus();
+    return;
+  }
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const options = [...combo.querySelectorAll(".combo-option")];
+    if (!options.length) return;
+    const index = options.findIndex((item) => item.classList.contains("highlight"));
+    const next = index < 0 ? (event.key === "ArrowDown" ? 0 : options.length - 1) : (index + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+    options.forEach((item) => item.classList.remove("highlight"));
+    options[next].classList.add("highlight");
+    options[next].scrollIntoView({ block: "nearest" });
+  }
+  if (event.key === "Enter") {
+    event.preventDefault();
+    const highlighted = combo.querySelector(".combo-option.highlight") || combo.querySelector(".combo-option");
+    if (highlighted) highlighted.click();
+  }
+  if (event.key === "Backspace" && !event.target.value) {
+    const selected = readSelected(combo);
+    if (selected.length) writeSelected(combo, selected.slice(0, -1));
+  }
+});
+
+document.body.addEventListener("focusin", (event) => {
+  if (!event.target.matches || !event.target.matches("[data-combo-search]")) return;
+  closeMenus(event.target.closest("[data-combo]"));
+  renderMenu(event.target.closest("[data-combo]"), event.target.value);
+});
+
 document.body.addEventListener("input", (event) => {
   const el = event.target;
+  if (el.matches && el.matches("[data-combo-search]")) {
+    renderMenu(el.closest("[data-combo]"), el.value);
+    return;
+  }
   if (el.id === "search") {
     ui.q = el.value;
     render();
@@ -630,9 +1063,14 @@ document.body.addEventListener("submit", (event) => {
     name: String(data.get("name") || "").trim(),
     engineer: String(data.get("engineer") || "").trim(),
     kickoff: {
+      warehouses: String(data.get("warehouses") || ""),
+      users: String(data.get("users") || ""),
+      clients: String(data.get("clients") || ""),
+      apiUsers: String(data.get("apiUsers") || ""),
       volume: String(data.get("volume") || ""),
-      marketplaces: String(data.get("marketplaces") || ""),
-      carriers: String(data.get("carriers") || "")
+      notes: String(data.get("notes") || ""),
+      marketplaces: readSelected(event.target.querySelector("[data-combo='marketplaces']")),
+      carriers: readSelected(event.target.querySelector("[data-combo='carriers']"))
     }
   });
   if (!item.name) return;
@@ -643,6 +1081,12 @@ document.body.addEventListener("submit", (event) => {
 });
 
 document.body.addEventListener("change", (event) => {
+  if (event.target.matches && event.target.matches("[data-kickoff-file]")) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (file) readKickoffFile(file);
+    return;
+  }
   if (event.target.id !== "import-file") return;
   const file = event.target.files[0];
   if (!file) return;

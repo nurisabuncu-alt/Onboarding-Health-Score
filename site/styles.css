@@ -210,8 +210,78 @@ textarea { min-height: 84px; resize: vertical; }
 .band-copy { font-size: 13px; color: var(--muted); margin-top: 8px; }
 .actions { display: flex; gap: 8px; margin-top: 14px; }
 
-.form-grid { display: grid; gap: 12px; max-width: 640px; }
+.form-grid { display: grid; gap: 12px; max-width: 760px; }
 .form-card { padding: 18px; }
+.import-row { grid-column: 1 / -1; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.import-row .hint { margin: 0; flex: 1; }
+.combo { display: grid; gap: 4px; min-width: 0; }
+.combo-label { font-size: 13px; color: var(--muted); }
+.combo-anchor { position: relative; }
+.combo-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 10px;
+  padding: 6px;
+}
+.combo-control:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(15, 95, 88, 0.12); }
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: var(--neutral-bg);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.combo-search { flex: 1 1 140px; min-width: 120px; border: 0; padding: 4px; background: transparent; }
+.combo-search:focus { outline: none; }
+.combo-hint { margin: 0; }
+.combo-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(28, 36, 48, 0.12);
+  max-height: 280px;
+  overflow: auto;
+  padding: 6px;
+}
+.combo-group p {
+  margin: 8px 8px 2px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.combo-option {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+.combo-option span { display: grid; }
+.combo-option small, .combo-option em, .combo-empty { color: var(--muted); font-size: 12px; font-style: normal; }
+.combo-option.on { background: #e7f3f1; }
+.combo-option.highlight, .combo-option:hover { background: var(--neutral-bg); }
+.combo-option.on.highlight, .combo-option.on:hover { background: #d5ebe7; }
+.combo-empty { margin: 8px; }
 
 @media (max-width: 980px) {
   .stats, .grid-2, .layout, .kickoff, .pair, .customer-row, .choices, .q-foot { grid-template-columns: 1fr; }
