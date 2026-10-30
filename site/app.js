@@ -213,6 +213,16 @@ const TO_DEVELOP = new Set([
   "Walmart DSV", "Walmart Marketplace", "Wish", "Zoho"
 ]);
 
+function catalogItem(name) {
+  const key = String(name || "").toLowerCase();
+  return MARKETPLACES.find((item) => item.name.toLowerCase() === key) || CARRIERS.find((item) => item.name.toLowerCase() === key) || null;
+}
+
+function requiresCustomization(name) {
+  const item = catalogItem(name);
+  return !!item && (item.group === "ERP" || item.name === "SPS Commerce");
+}
+
 function escapeReg(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -345,11 +355,12 @@ function rememberNames(list, names) {
   });
 }
 
-function partitionIntegrations(marketplaces, carriers, unsupported, developing) {
+function partitionIntegrations(marketplaces, carriers, unsupported, developing, custom) {
   const nextMarkets = [];
   const nextCarriers = [];
+  const nextCustom = [];
   const nextMissing = [];
-  [marketplaces, carriers, unsupported, developing].forEach((list) => {
+  [marketplaces, carriers, unsupported, developing, custom].forEach((list) => {
     if (list == null || list === "") return;
     const values = Array.isArray(list) ? list : String(list).split(/[,;\n]+/);
     values.forEach((value) => {
@@ -358,7 +369,8 @@ function partitionIntegrations(marketplaces, carriers, unsupported, developing) 
       const matched = uniqueNames(markets.concat(cars));
       if (matched.length) {
         matched.forEach((name) => {
-          if (TO_DEVELOP.has(name)) rememberNames(nextMissing, [name]);
+          if (requiresCustomization(name)) rememberNames(nextCustom, [name]);
+          else if (TO_DEVELOP.has(name)) rememberNames(nextMissing, [name]);
           else if (markets.includes(name)) rememberNames(nextMarkets, [name]);
           else rememberNames(nextCarriers, [name]);
         });
@@ -367,7 +379,7 @@ function partitionIntegrations(marketplaces, carriers, unsupported, developing) 
       rememberNames(nextMissing, [value]);
     });
   });
-  return { marketplaces: nextMarkets, carriers: nextCarriers, unsupported: nextMissing };
+  return { marketplaces: nextMarkets, carriers: nextCarriers, custom: nextCustom, unsupported: nextMissing };
 }
 
 function normalizeCustomer(item) {
@@ -378,18 +390,20 @@ function normalizeCustomer(item) {
   });
   if (kickoff.integrations == null) kickoff.integrations = "";
   if (!Array.isArray(kickoff.unsupported)) kickoff.unsupported = [];
+  if (!Array.isArray(kickoff.custom)) kickoff.custom = [];
   const earlierDeveloping = Array.isArray(kickoff.developing) ? kickoff.developing : [];
   const marketsBlank = !canonicalizeList(kickoff.marketplaces, MARKETPLACES).length && !String(kickoff.marketplaces || "").trim();
   const carriersBlank = !canonicalizeList(kickoff.carriers, CARRIERS).length && !String(kickoff.carriers || "").trim();
-  if (marketsBlank && carriersBlank && !kickoff.unsupported.length && String(kickoff.integrations || "").trim()) {
+  if (marketsBlank && carriersBlank && !kickoff.unsupported.length && !kickoff.custom.length && String(kickoff.integrations || "").trim()) {
     kickoff.marketplaces = matchSystems(kickoff.integrations, MARKETPLACES);
     kickoff.carriers = matchSystems(kickoff.integrations, CARRIERS);
     kickoff.unsupported = unsupportedFromText(kickoff.integrations);
     if (kickoff.marketplaces.length || kickoff.carriers.length || kickoff.unsupported.length) kickoff.integrations = "";
   }
-  const split = partitionIntegrations(kickoff.marketplaces, kickoff.carriers, kickoff.unsupported, earlierDeveloping);
+  const split = partitionIntegrations(kickoff.marketplaces, kickoff.carriers, kickoff.unsupported, earlierDeveloping, kickoff.custom);
   kickoff.marketplaces = split.marketplaces;
   kickoff.carriers = split.carriers;
+  kickoff.custom = split.custom;
   kickoff.unsupported = split.unsupported;
   delete kickoff.developing;
 }
@@ -442,7 +456,7 @@ function customer(seed) {
     name: seed.name || "",
     engineer: seed.engineer || "",
     kickoff: {
-      date: "", goLive: "", warehouses: "", users: "", clients: "", apiUsers: "", volume: "", marketplaces: [], carriers: [], unsupported: [], integrations: "", notes: "",
+      date: "", goLive: "", warehouses: "", users: "", clients: "", apiUsers: "", volume: "", marketplaces: [], carriers: [], custom: [], unsupported: [], integrations: "", notes: "",
       ...(seed.kickoff || {})
     },
     phases
@@ -675,8 +689,9 @@ function newView() {
           <label>API users<input class="text" name="apiUsers" /></label>
           <label>Expected volume from kickoff or contract<input class="text" name="volume" placeholder="Example: 500 orders/day" /></label>
         </div>
-        ${comboHtml("marketplaces", "Marketplace integrations", [], "Search Shopify, Amazon, SPS, NetSuite")}
+        ${comboHtml("marketplaces", "Marketplace integrations", [], "Search Shopify, Amazon, WooCommerce")}
         ${comboHtml("carriers", "Carrier integrations", [], "Search UPS, FedEx, ShipStation")}
+        ${customHtml([])}
         ${unsupportedHtml([])}
         <label>Kickoff notes<textarea name="notes"></textarea></label>
         <button class="btn primary" type="submit">Create and start Early Churn</button>
@@ -711,9 +726,10 @@ function customerView(current) {
         ${field("Expected volume", "volume", item.kickoff.volume, "text", true)}
         <label class="span-3">Clients<textarea data-kickoff="clients">${esc(item.kickoff.clients)}</textarea></label>
         <div class="pair">
-          ${comboHtml("marketplaces", "Marketplace integrations", item.kickoff.marketplaces, "Search Shopify, Amazon, SPS, NetSuite")}
+          ${comboHtml("marketplaces", "Marketplace integrations", item.kickoff.marketplaces, "Search Shopify, Amazon, WooCommerce")}
           ${comboHtml("carriers", "Carrier integrations", item.kickoff.carriers, "Search UPS, FedEx, ShipStation")}
         </div>
+        ${customHtml(item.kickoff.custom)}
         ${unsupportedHtml(item.kickoff.unsupported)}
         ${item.kickoff.integrations ? `<p class="hint span-3">Earlier combined list: ${esc(item.kickoff.integrations)}. Move each name into marketplace or carrier above.</p>` : ""}
         <label class="span-3">Kickoff notes<textarea data-kickoff="notes">${esc(item.kickoff.notes)}</textarea></label>
@@ -744,17 +760,25 @@ function comboHtml(key, label, selected, placeholder) {
       <div class="combo-control">${names.map((name) => tagHtml(name)).join("")}<input class="combo-search" data-combo-search type="text" placeholder="${esc(names.length ? "Add another" : placeholder)}" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" /></div>
       <div class="combo-menu" data-combo-menu hidden></div>
     </div>
-    <p class="hint combo-hint">From the Logiwa integrations list. A name with no owner, or one that is not listed, is kept under Integrations we do not support.</p>
+    <p class="hint combo-hint">From the Logiwa integrations list. ERP names and SPS Commerce go under Integrations require customization. A name with no owner, or one that is not listed, stays under Integrations not pre-built.</p>
   </div>`;
 }
 
+function customHtml(selected) {
+  return chipFieldHtml("custom", "Integrations require customization", selected, "Add an ERP, such as NetSuite, or SPS Commerce", "ERP integrations from the Logiwa list, plus SPS Commerce. These need custom work.");
+}
+
 function unsupportedHtml(selected) {
+  return chipFieldHtml("unsupported", "Integrations not pre-built", selected, "Add a system that is not on the Logiwa list", "Names that are not on the Logiwa list, and listed names with no owner, stay here unless they are an ERP or SPS Commerce.");
+}
+
+function chipFieldHtml(kind, label, selected, emptyPlaceholder, hint) {
   const names = Array.isArray(selected) ? selected : [];
-  const placeholder = names.length ? "Add another" : "Add a system that is not on the Logiwa list";
-  return `<div class="unsupported" data-unsupported data-selected="${esc(JSON.stringify(names))}">
-    <span class="combo-label">Integrations we do not support</span>
-    <div class="combo-control">${names.map((name) => tagHtml(name)).join("")}<input class="combo-search" data-unsupported-search type="text" placeholder="${esc(placeholder)}" autocomplete="off" /></div>
-    <p class="hint combo-hint">Names that are not on the Logiwa list, and listed names with no owner, stay here.</p>
+  const placeholder = names.length ? "Add another" : emptyPlaceholder;
+  return `<div class="${kind === "custom" ? "custom-list" : "unsupported"}" data-${kind} data-empty="${esc(emptyPlaceholder)}" data-selected="${esc(JSON.stringify(names))}">
+    <span class="combo-label">${esc(label)}</span>
+    <div class="combo-control">${names.map((name) => tagHtml(name)).join("")}<input class="combo-search" data-${kind}-search type="text" placeholder="${esc(placeholder)}" autocomplete="off" /></div>
+    <p class="hint combo-hint">${esc(hint)}</p>
   </div>`;
 }
 
@@ -782,24 +806,34 @@ function writeSelected(combo, names) {
   }
 }
 
-function writeUnsupported(box, names) {
+function writeChipBox(box, names, field) {
   const selected = uniqueNames(names);
   box.dataset.selected = JSON.stringify(selected);
   const control = box.querySelector(".combo-control");
-  const search = box.querySelector("[data-unsupported-search]");
+  const search = box.querySelector("[data-unsupported-search], [data-custom-search]");
   control.querySelectorAll(".tag").forEach((tag) => tag.remove());
   selected.forEach((name) => search.insertAdjacentHTML("beforebegin", tagHtml(name)));
-  search.placeholder = selected.length ? "Add another" : "Add a system that is not on the Logiwa list";
+  search.placeholder = selected.length ? "Add another" : box.dataset.empty;
   const found = currentCustomer();
   if (found) {
-    found.item.kickoff.unsupported = selected;
+    found.item.kickoff[field] = selected;
     save();
   }
 }
 
-function unsupportedBox(from) {
+function writeUnsupported(box, names) { writeChipBox(box, names, "unsupported"); }
+function writeCustom(box, names) { writeChipBox(box, names, "custom"); }
+
+function fieldBox(from, selector) {
   const root = from && from.closest ? from.closest("form, .kickoff, main") : document;
-  return (root && root.querySelector ? root.querySelector("[data-unsupported]") : null) || document.querySelector("[data-unsupported]");
+  return (root && root.querySelector ? root.querySelector(selector) : null) || document.querySelector(selector);
+}
+
+function toggleChip(box, write, name) {
+  if (!box) return;
+  const current = readSelected(box);
+  const has = current.some((item) => item.toLowerCase() === name.toLowerCase());
+  write(box, has ? current.filter((item) => item.toLowerCase() !== name.toLowerCase()) : current.concat(name));
 }
 
 function addTypedName(origin, typed) {
@@ -809,9 +843,14 @@ function addTypedName(origin, typed) {
   const carriers = matchSystems(clean, CARRIERS);
   const matched = uniqueNames(markets.concat(carriers));
   const root = origin.closest("form, .kickoff, main") || document;
-  const readyMarkets = markets.filter((name) => !TO_DEVELOP.has(name));
-  const readyCarriers = carriers.filter((name) => !TO_DEVELOP.has(name));
-  const develop = matched.filter((name) => TO_DEVELOP.has(name));
+  const custom = matched.filter((name) => requiresCustomization(name));
+  const readyMarkets = markets.filter((name) => !requiresCustomization(name) && !TO_DEVELOP.has(name));
+  const readyCarriers = carriers.filter((name) => !requiresCustomization(name) && !TO_DEVELOP.has(name));
+  const develop = matched.filter((name) => !requiresCustomization(name) && TO_DEVELOP.has(name));
+  if (custom.length) {
+    const box = fieldBox(origin, "[data-custom]");
+    if (box) writeCustom(box, readSelected(box).concat(custom));
+  }
   if (readyMarkets.length) {
     const combo = root.querySelector("[data-combo='marketplaces']");
     if (combo) writeSelected(combo, readSelected(combo).concat(readyMarkets));
@@ -822,7 +861,7 @@ function addTypedName(origin, typed) {
   }
   const missing = (matched.length ? unsupportedFromText(clean) : [clean]).concat(develop);
   if (missing.length) {
-    const box = unsupportedBox(origin);
+    const box = fieldBox(origin, "[data-unsupported]");
     if (box) writeUnsupported(box, readSelected(box).concat(missing));
   }
 }
@@ -830,8 +869,11 @@ function addTypedName(origin, typed) {
 function renderMenu(combo, query) {
   const catalog = CATALOGS[combo.dataset.combo] || [];
   const selected = readSelected(combo);
-  const heldBox = (combo.closest("form, .kickoff, main") || document).querySelector("[data-unsupported]");
-  const held = heldBox ? readSelected(heldBox) : [];
+  const root = combo.closest("form, .kickoff, main") || document;
+  const held = ["[data-unsupported]", "[data-custom]"].flatMap((selector) => {
+    const box = root.querySelector(selector);
+    return box ? readSelected(box) : [];
+  });
   const q = String(query || "").trim().toLowerCase();
   const matches = catalog.filter((item) => !q || item.name.toLowerCase().includes(q) || item.aliases.some((alias) => alias.includes(q)) || item.group.toLowerCase().includes(q));
   const groups = [];
@@ -845,7 +887,7 @@ function renderMenu(combo, query) {
   });
   let html = groups.map((group) => `<div class="combo-group"><p>${esc(group.name)}</p>${group.items.map((item) => {
     const on = selected.concat(held).some((name) => name.toLowerCase() === item.name.toLowerCase());
-    const note = item.note;
+    const note = [item.note, requiresCustomization(item.name) ? "Requires customization" : ""].filter(Boolean).join(" · ");
     return `<button type="button" class="combo-option${on ? " on" : ""}" data-option="${esc(item.name)}" role="option" aria-selected="${on}"><span>${esc(item.name)}${note ? `<small>${esc(note)}</small>` : ""}</span>${on ? "<em>Selected</em>" : ""}</button>`;
   }).join("")}</div>`).join("");
   const exact = catalog.some((item) => item.name.toLowerCase() === q) || selected.some((name) => name.toLowerCase() === q);
@@ -946,10 +988,12 @@ function applyKickoff(parsed, kickoff) {
       kickoff.marketplaces,
       kickoff.carriers,
       unsupportedFromText([storeText, carrierText].filter(Boolean).join("\n")),
-      kickoff.developing
+      kickoff.developing,
+      kickoff.custom
     );
     kickoff.marketplaces = split.marketplaces;
     kickoff.carriers = split.carriers;
+    kickoff.custom = split.custom;
     kickoff.unsupported = split.unsupported;
     delete kickoff.developing;
   }
@@ -965,7 +1009,8 @@ function applyKickoff(parsed, kickoff) {
   if (kickoff.clients) parts.push("clients captured");
   if (kickoff.marketplaces.length) parts.push(`marketplaces: ${kickoff.marketplaces.join(", ")}`);
   if (kickoff.carriers.length) parts.push(`carriers: ${kickoff.carriers.join(", ")}`);
-  if (kickoff.unsupported && kickoff.unsupported.length) parts.push(`integrations we do not support: ${kickoff.unsupported.join(", ")}`);
+  if (kickoff.custom && kickoff.custom.length) parts.push(`require customization: ${kickoff.custom.join(", ")}`);
+  if (kickoff.unsupported && kickoff.unsupported.length) parts.push(`not pre-built: ${kickoff.unsupported.join(", ")}`);
   return parts.length ? `Imported kickoff · ${parts.join(" · ")}` : "No Project Details or Integration answers were found in that workbook.";
 }
 
@@ -992,7 +1037,7 @@ function readKickoffFile(file) {
         if (line) line.textContent = summary;
         return;
       }
-      const draft = { warehouses: "", users: "", clients: "", apiUsers: "", notes: "", marketplaces: [], carriers: [], unsupported: [] };
+      const draft = { warehouses: "", users: "", clients: "", apiUsers: "", notes: "", marketplaces: [], carriers: [], custom: [], unsupported: [] };
       const form = document.getElementById("new-form");
       if (form) draft.notes = String(new FormData(form).get("notes") || "");
       const summary = applyKickoff(parsed, draft);
@@ -1004,6 +1049,8 @@ function readKickoffFile(file) {
         const combo = form && form.querySelector(`[data-combo="${key}"]`);
         if (combo) writeSelected(combo, draft[key]);
       });
+      const custom = form && form.querySelector("[data-custom]");
+      if (custom) writeCustom(custom, draft.custom || []);
       const missing = form && form.querySelector("[data-unsupported]");
       if (missing) writeUnsupported(missing, draft.unsupported || []);
       const line = status();
@@ -1208,9 +1255,10 @@ document.body.addEventListener("click", (event) => {
   const option = event.target.closest("[data-option], [data-add-custom], [data-remove]");
   if (option) {
     event.preventDefault();
-    const unsupported = option.closest("[data-unsupported]");
-    if (unsupported) {
-      writeUnsupported(unsupported, readSelected(unsupported).filter((name) => name !== option.dataset.remove));
+    const chip = option.closest("[data-unsupported], [data-custom]");
+    if (chip) {
+      const write = chip.hasAttribute("data-custom") ? writeCustom : writeUnsupported;
+      write(chip, readSelected(chip).filter((name) => name !== option.dataset.remove));
       return;
     }
     const combo = option.closest("[data-combo]");
@@ -1218,12 +1266,9 @@ document.body.addEventListener("click", (event) => {
     if (option.dataset.remove) writeSelected(combo, selected.filter((name) => name !== option.dataset.remove));
     if (option.dataset.option) {
       const name = option.dataset.option;
-      if (TO_DEVELOP.has(name)) {
-        const box = unsupportedBox(combo);
-        const current = box ? readSelected(box) : [];
-        const has = current.some((item) => item.toLowerCase() === name.toLowerCase());
-        if (box) writeUnsupported(box, has ? current.filter((item) => item.toLowerCase() !== name.toLowerCase()) : current.concat(name));
-      } else {
+      if (requiresCustomization(name)) toggleChip(fieldBox(combo, "[data-custom]"), writeCustom, name);
+      else if (TO_DEVELOP.has(name)) toggleChip(fieldBox(combo, "[data-unsupported]"), writeUnsupported, name);
+      else {
         const has = selected.some((item) => item.toLowerCase() === name.toLowerCase());
         writeSelected(combo, has ? selected.filter((item) => item.toLowerCase() !== name.toLowerCase()) : selected.concat(name));
       }
@@ -1285,16 +1330,17 @@ document.body.addEventListener("click", (event) => {
 });
 
 document.body.addEventListener("keydown", (event) => {
-  if (event.target.matches && event.target.matches("[data-unsupported-search]")) {
-    const box = event.target.closest("[data-unsupported]");
+  const chipSearch = event.target.closest("[data-unsupported], [data-custom]");
+  if (chipSearch && event.target.matches && event.target.matches("[data-unsupported-search], [data-custom-search]")) {
+    const write = chipSearch.hasAttribute("data-custom") ? writeCustom : writeUnsupported;
     if (event.key === "Enter") {
       event.preventDefault();
-      addTypedName(box, event.target.value);
+      addTypedName(chipSearch, event.target.value);
       event.target.value = "";
     }
     if (event.key === "Backspace" && !event.target.value) {
-      const selected = readSelected(box);
-      if (selected.length) writeUnsupported(box, selected.slice(0, -1));
+      const selected = readSelected(chipSearch);
+      if (selected.length) write(chipSearch, selected.slice(0, -1));
     }
     return;
   }
@@ -1398,6 +1444,7 @@ document.body.addEventListener("submit", (event) => {
       notes: String(data.get("notes") || ""),
       marketplaces: readSelected(event.target.querySelector("[data-combo='marketplaces']")),
       carriers: readSelected(event.target.querySelector("[data-combo='carriers']")),
+      custom: readSelected(event.target.querySelector("[data-custom]")),
       unsupported: readSelected(event.target.querySelector("[data-unsupported]"))
     }
   });
