@@ -348,7 +348,6 @@ function rememberNames(list, names) {
 function partitionIntegrations(marketplaces, carriers, unsupported, developing) {
   const nextMarkets = [];
   const nextCarriers = [];
-  const nextDeveloping = [];
   const nextMissing = [];
   [marketplaces, carriers, unsupported, developing].forEach((list) => {
     if (list == null || list === "") return;
@@ -359,7 +358,7 @@ function partitionIntegrations(marketplaces, carriers, unsupported, developing) 
       const matched = uniqueNames(markets.concat(cars));
       if (matched.length) {
         matched.forEach((name) => {
-          if (TO_DEVELOP.has(name)) rememberNames(nextDeveloping, [name]);
+          if (TO_DEVELOP.has(name)) rememberNames(nextMissing, [name]);
           else if (markets.includes(name)) rememberNames(nextMarkets, [name]);
           else rememberNames(nextCarriers, [name]);
         });
@@ -368,7 +367,7 @@ function partitionIntegrations(marketplaces, carriers, unsupported, developing) 
       rememberNames(nextMissing, [value]);
     });
   });
-  return { marketplaces: nextMarkets, carriers: nextCarriers, developing: nextDeveloping, unsupported: nextMissing };
+  return { marketplaces: nextMarkets, carriers: nextCarriers, unsupported: nextMissing };
 }
 
 function normalizeCustomer(item) {
@@ -379,7 +378,7 @@ function normalizeCustomer(item) {
   });
   if (kickoff.integrations == null) kickoff.integrations = "";
   if (!Array.isArray(kickoff.unsupported)) kickoff.unsupported = [];
-  if (!Array.isArray(kickoff.developing)) kickoff.developing = [];
+  const earlierDeveloping = Array.isArray(kickoff.developing) ? kickoff.developing : [];
   const marketsBlank = !canonicalizeList(kickoff.marketplaces, MARKETPLACES).length && !String(kickoff.marketplaces || "").trim();
   const carriersBlank = !canonicalizeList(kickoff.carriers, CARRIERS).length && !String(kickoff.carriers || "").trim();
   if (marketsBlank && carriersBlank && !kickoff.unsupported.length && String(kickoff.integrations || "").trim()) {
@@ -388,11 +387,11 @@ function normalizeCustomer(item) {
     kickoff.unsupported = unsupportedFromText(kickoff.integrations);
     if (kickoff.marketplaces.length || kickoff.carriers.length || kickoff.unsupported.length) kickoff.integrations = "";
   }
-  const split = partitionIntegrations(kickoff.marketplaces, kickoff.carriers, kickoff.unsupported, kickoff.developing);
+  const split = partitionIntegrations(kickoff.marketplaces, kickoff.carriers, kickoff.unsupported, earlierDeveloping);
   kickoff.marketplaces = split.marketplaces;
   kickoff.carriers = split.carriers;
-  kickoff.developing = split.developing;
   kickoff.unsupported = split.unsupported;
+  delete kickoff.developing;
 }
 
 let state = load();
@@ -443,7 +442,7 @@ function customer(seed) {
     name: seed.name || "",
     engineer: seed.engineer || "",
     kickoff: {
-      date: "", goLive: "", warehouses: "", users: "", clients: "", apiUsers: "", volume: "", marketplaces: [], carriers: [], developing: [], unsupported: [], integrations: "", notes: "",
+      date: "", goLive: "", warehouses: "", users: "", clients: "", apiUsers: "", volume: "", marketplaces: [], carriers: [], unsupported: [], integrations: "", notes: "",
       ...(seed.kickoff || {})
     },
     phases
@@ -678,7 +677,6 @@ function newView() {
         </div>
         ${comboHtml("marketplaces", "Marketplace integrations", [], "Search Shopify, Amazon, SPS, NetSuite")}
         ${comboHtml("carriers", "Carrier integrations", [], "Search UPS, FedEx, ShipStation")}
-        ${developingHtml([])}
         ${unsupportedHtml([])}
         <label>Kickoff notes<textarea name="notes"></textarea></label>
         <button class="btn primary" type="submit">Create and start Early Churn</button>
@@ -716,7 +714,6 @@ function customerView(current) {
           ${comboHtml("marketplaces", "Marketplace integrations", item.kickoff.marketplaces, "Search Shopify, Amazon, SPS, NetSuite")}
           ${comboHtml("carriers", "Carrier integrations", item.kickoff.carriers, "Search UPS, FedEx, ShipStation")}
         </div>
-        ${developingHtml(item.kickoff.developing)}
         ${unsupportedHtml(item.kickoff.unsupported)}
         ${item.kickoff.integrations ? `<p class="hint span-3">Earlier combined list: ${esc(item.kickoff.integrations)}. Move each name into marketplace or carrier above.</p>` : ""}
         <label class="span-3">Kickoff notes<textarea data-kickoff="notes">${esc(item.kickoff.notes)}</textarea></label>
@@ -747,17 +744,7 @@ function comboHtml(key, label, selected, placeholder) {
       <div class="combo-control">${names.map((name) => tagHtml(name)).join("")}<input class="combo-search" data-combo-search type="text" placeholder="${esc(names.length ? "Add another" : placeholder)}" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" /></div>
       <div class="combo-menu" data-combo-menu hidden></div>
     </div>
-    <p class="hint combo-hint">From the Logiwa integrations list. A name with no owner is kept under To be developed.</p>
-  </div>`;
-}
-
-function developingHtml(selected) {
-  const names = Array.isArray(selected) ? selected : [];
-  const placeholder = names.length ? "Add another" : "Add a listed system that still needs an owner";
-  return `<div class="developing" data-developing data-selected="${esc(JSON.stringify(names))}">
-    <span class="combo-label">To be developed</span>
-    <div class="combo-control">${names.map((name) => tagHtml(name)).join("")}<input class="combo-search" data-developing-search type="text" placeholder="${esc(placeholder)}" autocomplete="off" /></div>
-    <p class="hint combo-hint">On the Logiwa list, with no owner yet. These still need to be built.</p>
+    <p class="hint combo-hint">From the Logiwa integrations list. A name with no owner, or one that is not listed, is kept under Integrations we do not support.</p>
   </div>`;
 }
 
@@ -767,7 +754,7 @@ function unsupportedHtml(selected) {
   return `<div class="unsupported" data-unsupported data-selected="${esc(JSON.stringify(names))}">
     <span class="combo-label">Integrations we do not support</span>
     <div class="combo-control">${names.map((name) => tagHtml(name)).join("")}<input class="combo-search" data-unsupported-search type="text" placeholder="${esc(placeholder)}" autocomplete="off" /></div>
-    <p class="hint combo-hint">Compared with the Logiwa integrations list. Names from the kickoff that are not on that list stay here.</p>
+    <p class="hint combo-hint">Names that are not on the Logiwa list, and listed names with no owner, stay here.</p>
   </div>`;
 }
 
@@ -791,21 +778,6 @@ function writeSelected(combo, names) {
   const found = currentCustomer();
   if (found) {
     found.item.kickoff[combo.dataset.combo] = selected;
-    save();
-  }
-}
-
-function writeDeveloping(box, names) {
-  const selected = uniqueNames(names);
-  box.dataset.selected = JSON.stringify(selected);
-  const control = box.querySelector(".combo-control");
-  const search = box.querySelector("[data-developing-search]");
-  control.querySelectorAll(".tag").forEach((tag) => tag.remove());
-  selected.forEach((name) => search.insertAdjacentHTML("beforebegin", tagHtml(name)));
-  search.placeholder = selected.length ? "Add another" : "Add a listed system that still needs an owner";
-  const found = currentCustomer();
-  if (found) {
-    found.item.kickoff.developing = selected;
     save();
   }
 }
@@ -848,11 +820,7 @@ function addTypedName(origin, typed) {
     const combo = root.querySelector("[data-combo='carriers']");
     if (combo) writeSelected(combo, readSelected(combo).concat(readyCarriers));
   }
-  if (develop.length) {
-    const box = root.querySelector("[data-developing]");
-    if (box) writeDeveloping(box, readSelected(box).concat(develop));
-  }
-  const missing = matched.length ? unsupportedFromText(clean) : [clean];
+  const missing = (matched.length ? unsupportedFromText(clean) : [clean]).concat(develop);
   if (missing.length) {
     const box = unsupportedBox(origin);
     if (box) writeUnsupported(box, readSelected(box).concat(missing));
@@ -862,8 +830,8 @@ function addTypedName(origin, typed) {
 function renderMenu(combo, query) {
   const catalog = CATALOGS[combo.dataset.combo] || [];
   const selected = readSelected(combo);
-  const developBox = (combo.closest("form, .kickoff, main") || document).querySelector("[data-developing]");
-  const developing = developBox ? readSelected(developBox) : [];
+  const heldBox = (combo.closest("form, .kickoff, main") || document).querySelector("[data-unsupported]");
+  const held = heldBox ? readSelected(heldBox) : [];
   const q = String(query || "").trim().toLowerCase();
   const matches = catalog.filter((item) => !q || item.name.toLowerCase().includes(q) || item.aliases.some((alias) => alias.includes(q)) || item.group.toLowerCase().includes(q));
   const groups = [];
@@ -876,8 +844,8 @@ function renderMenu(combo, query) {
     bucket.items.push(item);
   });
   let html = groups.map((group) => `<div class="combo-group"><p>${esc(group.name)}</p>${group.items.map((item) => {
-    const on = selected.concat(developing).some((name) => name.toLowerCase() === item.name.toLowerCase());
-    const note = TO_DEVELOP.has(item.name) ? "To be developed" : item.note;
+    const on = selected.concat(held).some((name) => name.toLowerCase() === item.name.toLowerCase());
+    const note = item.note;
     return `<button type="button" class="combo-option${on ? " on" : ""}" data-option="${esc(item.name)}" role="option" aria-selected="${on}"><span>${esc(item.name)}${note ? `<small>${esc(note)}</small>` : ""}</span>${on ? "<em>Selected</em>" : ""}</button>`;
   }).join("")}</div>`).join("");
   const exact = catalog.some((item) => item.name.toLowerCase() === q) || selected.some((name) => name.toLowerCase() === q);
@@ -982,8 +950,8 @@ function applyKickoff(parsed, kickoff) {
     );
     kickoff.marketplaces = split.marketplaces;
     kickoff.carriers = split.carriers;
-    kickoff.developing = split.developing;
     kickoff.unsupported = split.unsupported;
+    delete kickoff.developing;
   }
   if (lines.length) {
     const marker = "Imported from kickoff Excel";
@@ -997,8 +965,7 @@ function applyKickoff(parsed, kickoff) {
   if (kickoff.clients) parts.push("clients captured");
   if (kickoff.marketplaces.length) parts.push(`marketplaces: ${kickoff.marketplaces.join(", ")}`);
   if (kickoff.carriers.length) parts.push(`carriers: ${kickoff.carriers.join(", ")}`);
-  if (kickoff.developing && kickoff.developing.length) parts.push(`to be developed: ${kickoff.developing.join(", ")}`);
-  if (kickoff.unsupported && kickoff.unsupported.length) parts.push(`not on the Logiwa list: ${kickoff.unsupported.join(", ")}`);
+  if (kickoff.unsupported && kickoff.unsupported.length) parts.push(`integrations we do not support: ${kickoff.unsupported.join(", ")}`);
   return parts.length ? `Imported kickoff · ${parts.join(" · ")}` : "No Project Details or Integration answers were found in that workbook.";
 }
 
@@ -1025,7 +992,7 @@ function readKickoffFile(file) {
         if (line) line.textContent = summary;
         return;
       }
-      const draft = { warehouses: "", users: "", clients: "", apiUsers: "", notes: "", marketplaces: [], carriers: [], developing: [], unsupported: [] };
+      const draft = { warehouses: "", users: "", clients: "", apiUsers: "", notes: "", marketplaces: [], carriers: [], unsupported: [] };
       const form = document.getElementById("new-form");
       if (form) draft.notes = String(new FormData(form).get("notes") || "");
       const summary = applyKickoff(parsed, draft);
@@ -1037,8 +1004,6 @@ function readKickoffFile(file) {
         const combo = form && form.querySelector(`[data-combo="${key}"]`);
         if (combo) writeSelected(combo, draft[key]);
       });
-      const planned = form && form.querySelector("[data-developing]");
-      if (planned) writeDeveloping(planned, draft.developing || []);
       const missing = form && form.querySelector("[data-unsupported]");
       if (missing) writeUnsupported(missing, draft.unsupported || []);
       const line = status();
@@ -1243,11 +1208,6 @@ document.body.addEventListener("click", (event) => {
   const option = event.target.closest("[data-option], [data-add-custom], [data-remove]");
   if (option) {
     event.preventDefault();
-    const developing = option.closest("[data-developing]");
-    if (developing) {
-      writeDeveloping(developing, readSelected(developing).filter((name) => name !== option.dataset.remove));
-      return;
-    }
     const unsupported = option.closest("[data-unsupported]");
     if (unsupported) {
       writeUnsupported(unsupported, readSelected(unsupported).filter((name) => name !== option.dataset.remove));
@@ -1259,10 +1219,10 @@ document.body.addEventListener("click", (event) => {
     if (option.dataset.option) {
       const name = option.dataset.option;
       if (TO_DEVELOP.has(name)) {
-        const box = (combo.closest("form, .kickoff, main") || document).querySelector("[data-developing]");
+        const box = unsupportedBox(combo);
         const current = box ? readSelected(box) : [];
         const has = current.some((item) => item.toLowerCase() === name.toLowerCase());
-        if (box) writeDeveloping(box, has ? current.filter((item) => item.toLowerCase() !== name.toLowerCase()) : current.concat(name));
+        if (box) writeUnsupported(box, has ? current.filter((item) => item.toLowerCase() !== name.toLowerCase()) : current.concat(name));
       } else {
         const has = selected.some((item) => item.toLowerCase() === name.toLowerCase());
         writeSelected(combo, has ? selected.filter((item) => item.toLowerCase() !== name.toLowerCase()) : selected.concat(name));
@@ -1325,9 +1285,8 @@ document.body.addEventListener("click", (event) => {
 });
 
 document.body.addEventListener("keydown", (event) => {
-  if (event.target.matches && event.target.matches("[data-unsupported-search], [data-developing-search]")) {
-    const box = event.target.closest("[data-unsupported], [data-developing]");
-    const write = box.hasAttribute("data-developing") ? writeDeveloping : writeUnsupported;
+  if (event.target.matches && event.target.matches("[data-unsupported-search]")) {
+    const box = event.target.closest("[data-unsupported]");
     if (event.key === "Enter") {
       event.preventDefault();
       addTypedName(box, event.target.value);
@@ -1335,7 +1294,7 @@ document.body.addEventListener("keydown", (event) => {
     }
     if (event.key === "Backspace" && !event.target.value) {
       const selected = readSelected(box);
-      if (selected.length) write(box, selected.slice(0, -1));
+      if (selected.length) writeUnsupported(box, selected.slice(0, -1));
     }
     return;
   }
@@ -1439,7 +1398,6 @@ document.body.addEventListener("submit", (event) => {
       notes: String(data.get("notes") || ""),
       marketplaces: readSelected(event.target.querySelector("[data-combo='marketplaces']")),
       carriers: readSelected(event.target.querySelector("[data-combo='carriers']")),
-      developing: readSelected(event.target.querySelector("[data-developing]")),
       unsupported: readSelected(event.target.querySelector("[data-unsupported]"))
     }
   });
