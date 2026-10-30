@@ -289,6 +289,9 @@ textarea { min-height: 84px; resize: vertical; }
 .combo-option.highlight, .combo-option:hover { background: var(--neutral-bg); }
 .combo-option.on.highlight, .combo-option.on:hover { background: #d5ebe7; }
 .combo-empty { margin: 8px; }
+.unsupported { grid-column: 1 / -1; display: grid; gap: 4px; }
+.unsupported .combo-control { background: var(--med-bg); border-color: #ead9b8; }
+.unsupported .tag { background: white; }
 
 @media (max-width: 980px) {
   .stats, .grid-2, .layout, .kickoff, .pair, .customer-row, .choices, .q-foot { grid-template-columns: 1fr; }
