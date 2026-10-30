@@ -760,12 +760,12 @@ function comboHtml(key, label, selected, placeholder) {
       <div class="combo-control">${names.map((name) => tagHtml(name)).join("")}<input class="combo-search" data-combo-search type="text" placeholder="${esc(names.length ? "Add another" : placeholder)}" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" /></div>
       <div class="combo-menu" data-combo-menu hidden></div>
     </div>
-    <p class="hint combo-hint">From the Logiwa integrations list. ERP names and SPS Commerce go under Integrations require customization. A name with no owner, or one that is not listed, stays under Integrations not pre-built.</p>
+    <p class="hint combo-hint">From the Logiwa integrations list. ERP names and SPS Commerce go under Integrations that may require customization. A name with no owner, or one that is not listed, stays under Integrations not pre-built.</p>
   </div>`;
 }
 
 function customHtml(selected) {
-  return chipFieldHtml("custom", "Integrations require customization", selected, "Add an ERP, such as NetSuite, or SPS Commerce", "ERP integrations from the Logiwa list, plus SPS Commerce. These need custom work.");
+  return chipFieldHtml("custom", "Integrations that may require customization", selected, "Add an ERP, such as NetSuite, or SPS Commerce", "ERP integrations from the Logiwa list, plus SPS Commerce. These may need custom work.");
 }
 
 function unsupportedHtml(selected) {
@@ -887,7 +887,7 @@ function renderMenu(combo, query) {
   });
   let html = groups.map((group) => `<div class="combo-group"><p>${esc(group.name)}</p>${group.items.map((item) => {
     const on = selected.concat(held).some((name) => name.toLowerCase() === item.name.toLowerCase());
-    const note = [item.note, requiresCustomization(item.name) ? "Requires customization" : ""].filter(Boolean).join(" · ");
+    const note = [item.note, requiresCustomization(item.name) ? "May require customization" : ""].filter(Boolean).join(" · ");
     return `<button type="button" class="combo-option${on ? " on" : ""}" data-option="${esc(item.name)}" role="option" aria-selected="${on}"><span>${esc(item.name)}${note ? `<small>${esc(note)}</small>` : ""}</span>${on ? "<em>Selected</em>" : ""}</button>`;
   }).join("")}</div>`).join("");
   const exact = catalog.some((item) => item.name.toLowerCase() === q) || selected.some((name) => name.toLowerCase() === q);
@@ -1009,7 +1009,7 @@ function applyKickoff(parsed, kickoff) {
   if (kickoff.clients) parts.push("clients captured");
   if (kickoff.marketplaces.length) parts.push(`marketplaces: ${kickoff.marketplaces.join(", ")}`);
   if (kickoff.carriers.length) parts.push(`carriers: ${kickoff.carriers.join(", ")}`);
-  if (kickoff.custom && kickoff.custom.length) parts.push(`require customization: ${kickoff.custom.join(", ")}`);
+  if (kickoff.custom && kickoff.custom.length) parts.push(`may require customization: ${kickoff.custom.join(", ")}`);
   if (kickoff.unsupported && kickoff.unsupported.length) parts.push(`not pre-built: ${kickoff.unsupported.join(", ")}`);
   return parts.length ? `Imported kickoff · ${parts.join(" · ")}` : "No Project Details or Integration answers were found in that workbook.";
 }
