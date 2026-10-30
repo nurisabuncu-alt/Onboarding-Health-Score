@@ -208,6 +208,13 @@ textarea { min-height: 84px; resize: vertical; }
 .rail .pill { margin: 8px 0; }
 .driver { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; padding: 7px 0; border-top: 1px solid var(--line); }
 .band-copy { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.plan { margin-bottom: 12px; padding: 16px 18px 8px; }
+.plan h2 { font-size: 16px; margin-bottom: 6px; }
+.plan-lead { font-size: 15px; margin-bottom: 10px; }
+.plan-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.plan-steps li { padding: 10px 0; border-top: 1px solid var(--line); }
+.plan-steps .meta { margin-bottom: 2px; }
+.plan-steps .hint { margin: 4px 0 0; }
 .actions { display: flex; gap: 8px; margin-top: 14px; }
 
 .form-grid { display: grid; gap: 12px; max-width: 760px; }

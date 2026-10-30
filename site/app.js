@@ -600,6 +600,7 @@ function customerView(current) {
         <label class="span-3">Kickoff notes<textarea data-kickoff="notes">${esc(item.kickoff.notes)}</textarea></label>
       </section>
       <nav class="tabs">${PHASES.map((itemPhase) => tab(item, itemPhase, phase.id)).join("")}</nav>
+      <section class="card plan" id="plan">${planHtml(item, phase, result)}</section>
       <section class="layout">
         <div class="questions" id="questions">${questionsHtml(item, phase)}</div>
         <aside class="rail" id="rail">${railHtml(item, phase, result)}</aside>
@@ -855,6 +856,117 @@ function questionsHtml(item, phase) {
   }).join("");
 }
 
+function planDrivers(phase, result) {
+  return result.drivers.slice().sort((a, b) => {
+    const drag = (entry) => (5 - entry.answer.score) * entry.metric.weight;
+    const boost = (entry) => phase.id === "sticky" && entry.metric.id === "sev1" && entry.answer.score === 1 ? 0.01 : 0;
+    return drag(b) + boost(b) - (drag(a) + boost(a));
+  }).slice(0, 4);
+}
+
+function planLead(phase, result) {
+  const leads = {
+    early: {
+      high: "It may help to pause and talk through the open concerns before the project moves ahead.",
+      medium: "Implementation can continue, with a little extra care for the notes below.",
+      low: "Implementation looks ready to move ahead."
+    },
+    activation: {
+      high: "Go-live may feel easier if the team spends a little time on the notes below first.",
+      medium: "Activation can continue. The notes below are light follow-ups.",
+      low: "Activation is in a good place."
+    },
+    sticky: {
+      high: "A handoff conversation can wait until the notes below feel a little more settled.",
+      medium: "A handoff looks possible, with a short follow-up on the notes below.",
+      low: "This account looks ready to leave implementation."
+    }
+  };
+  return leads[phase.id][result.band];
+}
+
+function evidencePhrase(metric, answer) {
+  const raw = String(answer.raw ?? "").trim();
+  if (raw === "" || Number.isNaN(Number(raw))) return "";
+  const n = Number(raw);
+  if (metric.id === "sev1") return n === 1 ? "There is 1 open Sev1 ticket." : `There are ${n} open Sev1 tickets.`;
+  if (metric.id === "sev2") return `There are ${n} open Sev2 tickets.`;
+  if (metric.id === "volume") return `It currently matches ${n}% of the baseline.`;
+  if (metric.id === "integration") return `The health score entered is ${n}.`;
+  if (metric.id === "training") return n === 1 ? "One session was missed or moved." : `${n} sessions were missed or moved.`;
+  if (metric.id === "uat") return `${n}% of test cases are verified.`;
+  if (metric.helper === "weeks") return `Go-live has moved ${n} weeks.`;
+  if (metric.id === "nps") return `The survey rating entered is ${n}.`;
+  return "";
+}
+
+function planStep(metric, answer, item) {
+  const low = answer.score === 1;
+  const evidence = evidencePhrase(metric, answer);
+  const join = (text) => evidence ? `${text} ${evidence}` : text;
+  const known = {
+    sev1: low
+      ? ["It would help to look through the open Sev1 tickets with support before a handoff conversation.", "The open Sev1 tickets have been worked through, and this phase can be scored again."]
+      : ["A short look at the remaining Sev1 tickets would make the next conversation easier.", "The remaining Sev1 tickets have an owner and a next check-in."],
+    sev2: low
+      ? ["The Sev2 queue is a bit full. Support can thin it out once the more pressing tickets feel settled.", "The Sev2 count is closer to a comfortable level."]
+      : ["The Sev2 count is worth a glance so it does not grow.", "Someone has had a look and the queue feels manageable."],
+    volume: low
+      ? [`Shipment volume is under the kickoff baseline${item.kickoff.volume ? ` (${item.kickoff.volume})` : ""}. It may help to confirm that this is still the right comparison.`, "The baseline is confirmed, and the customer is comfortable with the gap."]
+      : ["Volume is partway toward the baseline. A short check can confirm the gap is expected.", "The customer has confirmed whether the gap is expected."],
+    integration: low
+      ? ["Integration health is on the low side. Naming the flow that is struggling would make the next conversation easier.", "The struggling flow is named in the phase note."]
+      : ["Integration health has some room to improve. A note on which flow needs attention is enough for now.", "The flow to watch is named in the phase note."],
+    payment: low
+      ? ["Payments may need a closer, gentler follow-up. The invoice detail can stay in Maxio.", "The follow-up is recorded, or the linked subscription has no past-due invoice."]
+      : ["There looks to be a small payment follow-up. The invoice detail can stay in Maxio.", "The follow-up is recorded, or the delay has a note the team is comfortable with."],
+    training: low
+      ? ["Training has been hard to keep on the calendar. A makeup session, when the team is ready, would help.", "A makeup session is on the calendar, or the team has agreed to pause training."]
+      : ["A few training sessions moved. Catching one of them up would be plenty.", "One of the moved sessions has a new time, or the team is comfortable moving on."],
+    uat: low
+      ? ["Testing is still early. Inviting the customer to verify a few more cases would help.", "A few more cases are verified, and the customer knows what is left."]
+      : ["Testing is underway. A little more verified coverage would round it out.", "The customer is comfortable with how much has been verified."],
+    ontime: low
+      ? ["Go-live has moved quite a bit. A fresh date the customer is comfortable with would help.", "A new date is agreed, and it still feels realistic."]
+      : ["Go-live has shifted a little. Agreeing a date everyone can live with is a gentle next step.", "The date is agreed."]
+    ,
+    nps: low
+      ? ["The survey rating is on the low side. It may help to ask what would make the experience easier, when the customer is ready.", "The customer has had a chance to say what would help."]
+      : ["The survey rating is in the middle. A short conversation about what would make the experience easier could help.", "The team has heard what would make the experience easier."]
+  };
+  const pair = known[metric.id];
+  if (pair) return { action: join(pair[0]), done: pair[1] };
+  const name = metric.name.toLowerCase();
+  return low
+    ? { action: `It may help to spend a little time on ${name} before moving on.`, done: `${metric.name} has had a conversation, and the note says what was agreed.` }
+    : { action: `${metric.name} could use a light follow-up when there is a moment.`, done: `${metric.name} has a short note, or the team is comfortable leaving it.` };
+}
+
+function planTiming(index, step, drivers) {
+  if (index === 0) return "Suggested first";
+  const sev1Open = drivers.some((entry) => entry.metric.id === "sev1" && entry.answer.score === 1);
+  if (step.metric.id === "sev2" && sev1Open) return "Once Sev1 feels settled";
+  return step.answer.score === 1 ? "This week" : "When there is a moment";
+}
+
+function planHtml(item, phase, result) {
+  if (!result.complete) {
+    return `<h2>Suggested plan</h2><p class="plan-lead">A suggested plan appears once every applicable answer is in. Nothing here is firmed up until then.</p>`;
+  }
+  const drivers = planDrivers(phase, result);
+  const steps = drivers.map((entry, index) => {
+    const copy = planStep(entry.metric, entry.answer, item);
+    const owner = entry.metric.id === "sev1" || entry.metric.id === "sev2" ? "Implementation engineer, with support" : "Implementation engineer";
+    return `<li><p class="meta">${esc(planTiming(index, entry, drivers))} · ${esc(owner)}</p><p>${esc(copy.action)}</p><p class="hint">Feels settled when ${esc(copy.done.charAt(0).toLowerCase() + copy.done.slice(1))}</p></li>`;
+  }).join("");
+  const quiet = drivers.length ? "" : `<p class="hint">Nothing stands out as a follow-up.</p>`;
+  const payment = result.drivers.find((entry) => entry.metric.id === "payment");
+  const paymentNote = payment && !drivers.some((entry) => entry.metric.id === "payment")
+    ? `<p class="hint">${esc(payment.answer.score === 1 ? "Payments may also need a closer follow-up. The invoice detail can stay in Maxio." : "There is also a small payment follow-up. The invoice detail can stay in Maxio.")}</p>`
+    : "";
+  return `<h2>Suggested plan</h2><p class="plan-lead">${esc(planLead(phase, result))}</p>${steps ? `<ol class="plan-steps">${steps}</ol>` : ""}${quiet}${paymentNote}<p class="hint">Suggestions from this phase’s scores. The engineer can take them in any order.</p>`;
+}
+
 function railHtml(item, phase, result) {
   const cls = result.band || "";
   const headline = result.score == null ? "—" : fmt(result.score);
@@ -883,6 +995,8 @@ function touch(item, phaseId) {
 function paint(item, phase) {
   const result = evaluate(item, phase.id);
   document.getElementById("rail").innerHTML = railHtml(item, phase, result);
+  const plan = document.getElementById("plan");
+  if (plan) plan.innerHTML = planHtml(item, phase, result);
   const updated = document.getElementById("updated-line");
   if (updated) updated.textContent = `${item.sample ? "Sample record · " : ""}Last change ${when(item.phases[phase.id].updatedAt)}`;
   document.querySelectorAll(".tab").forEach((tabEl, index) => {
