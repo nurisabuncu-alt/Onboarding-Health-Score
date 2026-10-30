@@ -147,12 +147,12 @@ h1, h2, h3, p { margin: 0; }
   border: 1px solid var(--line);
   background: white;
   border-radius: 10px;
-  padding: 9px 11px;
+  padding: 11px 14px;
 }
 .name-input { font-size: 28px; font-weight: 650; letter-spacing: -0.03em; padding: 4px 8px; margin-left: -8px; }
 textarea { min-height: 84px; resize: vertical; }
-.kickoff { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-.pair { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kickoff { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 14px 16px; margin-bottom: 14px; padding: 22px 24px; }
+.pair { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .kickoff label, .form-grid label, .q label.block { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .span-2 { grid-column: span 2; }
 .span-3 { grid-column: span 3; }
@@ -218,10 +218,10 @@ textarea { min-height: 84px; resize: vertical; }
 .actions { display: flex; gap: 8px; margin-top: 14px; }
 
 .form-grid { display: grid; gap: 12px; max-width: 760px; }
-.form-card { padding: 18px; }
+.form-card { padding: 22px 24px; }
 .import-row { grid-column: 1 / -1; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .import-row .hint { margin: 0; flex: 1; }
-.combo { display: grid; gap: 4px; min-width: 0; }
+.combo { display: grid; gap: 6px; min-width: 0; }
 .combo-label { font-size: 13px; color: var(--muted); }
 .combo-anchor { position: relative; }
 .combo-control {
@@ -229,11 +229,11 @@ textarea { min-height: 84px; resize: vertical; }
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
-  min-height: 44px;
+  min-height: 48px;
   border: 1px solid var(--line);
   background: white;
   border-radius: 10px;
-  padding: 6px;
+  padding: 10px 14px;
 }
 .combo-control:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(15, 95, 88, 0.12); }
 .tag {
@@ -244,10 +244,10 @@ textarea { min-height: 84px; resize: vertical; }
   background: var(--neutral-bg);
   color: var(--ink);
   border-radius: 999px;
-  padding: 4px 8px;
+  padding: 6px 10px;
   font-size: 13px;
 }
-.combo-search { flex: 1 1 140px; min-width: 120px; border: 0; padding: 4px; background: transparent; }
+.combo-search { flex: 1 1 140px; min-width: 120px; border: 0; padding: 6px 2px; background: transparent; }
 .combo-search:focus { outline: none; }
 .combo-hint { margin: 0; }
 .combo-menu {
@@ -289,7 +289,7 @@ textarea { min-height: 84px; resize: vertical; }
 .combo-option.highlight, .combo-option:hover { background: var(--neutral-bg); }
 .combo-option.on.highlight, .combo-option.on:hover { background: #d5ebe7; }
 .combo-empty { margin: 8px; }
-.custom-list, .unsupported { grid-column: 1 / -1; display: grid; gap: 4px; }
+.custom-list, .unsupported { grid-column: 1 / -1; display: grid; gap: 6px; }
 .custom-list .combo-control { background: #eef3f8; border-color: #d3dee8; }
 .unsupported .combo-control { background: var(--med-bg); border-color: #ead9b8; }
 .custom-list .tag, .unsupported .tag { background: white; }
