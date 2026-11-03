@@ -406,6 +406,343 @@ function normalizeCustomer(item) {
   kickoff.custom = split.custom;
   kickoff.unsupported = split.unsupported;
   delete kickoff.developing;
+  normalizeStickyForm(item);
+}
+
+const STICKY_FIELDS = [
+  { key: "dateRequested", label: "Date requested", type: "date", match: /date requested/i },
+  { key: "requestedBy", label: "Requested by (OBE)", type: "text", match: /requested by/i },
+  { key: "csm", label: "CSM", type: "text", match: /^csm$/i },
+  { key: "salesAe", label: "Sales account executive", type: "text", match: /sales account executive/i },
+  { key: "orderLines", label: "Purchased order lines per month", type: "text", match: /order lines per month/i },
+  { key: "activatedDate", label: "Customer activated date", type: "date", match: /activated date/i },
+  { key: "onboardingApproval", label: "Onboarding approval date", type: "date", match: /onboarding approval/i },
+  { key: "salesApproval", label: "Sales / CSM approval date", type: "date", match: /sales\s*\/\s*csm approval/i },
+  { key: "scopeDelivered", label: "Has all scope been delivered", type: "yesno", match: /scope been delivered/i },
+  { key: "trainingDelivered", label: "Has training been delivered", type: "yesno", match: /training been delivered/i },
+  { key: "testingSignoff", label: "Customer testing sign-off", type: "yesno", match: /testing sign-?off/i },
+  { key: "pastDue", label: "Is customer past due with payments", type: "yesno", match: /past due/i },
+  { key: "shippedLines", label: "Customer shipped 20,000 order lines", type: "yesno", match: /shipped 20[,.]?000|shipped 20000/i },
+  { key: "consistentUsage", label: "Customer has 2 months of consistent usage", type: "yesno", match: /consistent usage/i }
+];
+
+function emptyStickyForm() {
+  const form = { updatedAt: "", aiAdoption: "" };
+  STICKY_FIELDS.forEach((field) => { form[field.key] = ""; });
+  return form;
+}
+
+function normalizeStickyForm(item) {
+  const current = item.stickyForm && typeof item.stickyForm === "object" ? item.stickyForm : {};
+  item.stickyForm = { ...emptyStickyForm(), ...current };
+}
+
+function stickyStarted(item) {
+  return STICKY_FIELDS.some((field) => String(item.stickyForm[field.key] || "").trim());
+}
+
+function scorePair(item) {
+  const activation = evaluate(item, "activation");
+  const pre = evaluate(item, "sticky");
+  const average = activation.complete && pre.complete ? (activation.score + pre.score) / 2 : null;
+  return { activation, pre, average };
+}
+
+function stickySuggestions(item) {
+  const form = item.stickyForm;
+  const scores = scorePair(item);
+  const steps = [];
+  if (!scores.activation.complete || !scores.pre.complete) {
+    steps.push({
+      level: "hold",
+      timing: "Before the sticky meeting",
+      owner: "Implementation engineer",
+      action: "Activation and Pre-Sticky both need a full score before this account is judged ready for the sticky meeting.",
+      done: "Both scores are in, so the average can be read."
+    });
+  } else if (scores.average < 3) {
+    steps.push({
+      level: "hold",
+      timing: "Suggested first",
+      owner: "Implementation engineer",
+      action: `Activation is ${fmt(scores.activation.score)} and Pre-Sticky is ${fmt(scores.pre.score)}. Together they average ${fmt(scores.average)}, under 3. It would help to look through those scores again. This account does not look ready to bring to the sticky meeting yet.`,
+      done: "The two scores have been reviewed, and the average is no longer under 3, or the team has agreed to wait."
+    });
+  }
+  if (stickyStarted(item)) {
+    if (form.testingSignoff !== "Yes") {
+      steps.push({
+        timing: "Before the sticky meeting",
+        owner: "Implementation engineer",
+        action: "Customer testing sign-off is still missing. Asking the customer to sign it would close that step.",
+        done: "Customer testing sign-off is marked Yes."
+      });
+    }
+    if (!String(form.onboardingApproval || "").trim()) {
+      steps.push({
+        timing: "Before the sticky meeting",
+        owner: "Implementation engineer",
+        action: "Onboarding approval is not dated yet. A sign-off there would help before the meeting.",
+        done: "The onboarding approval date is on the form."
+      });
+    }
+    if (!String(form.salesApproval || "").trim()) {
+      steps.push({
+        timing: "Before the sticky meeting",
+        owner: "Implementation engineer",
+        action: "Sales and CSM approval is not dated yet. That sign-off is still needed.",
+        done: "The Sales / CSM approval date is on the form."
+      });
+    }
+    if (form.scopeDelivered === "No") {
+      steps.push({
+        timing: "Before the sticky meeting",
+        owner: "Implementation engineer",
+        action: "Some of the agreed scope still looks open. Naming what is left would make the sticky conversation clearer.",
+        done: "Scope delivered is marked Yes, or the remaining scope has a note the team accepts."
+      });
+    }
+    if (form.trainingDelivered === "No") {
+      steps.push({
+        timing: "When there is a moment",
+        owner: "Implementation engineer",
+        action: "Training does not look finished. A remaining session, when the team is ready, would help.",
+        done: "Training delivered is marked Yes, or a makeup session is agreed."
+      });
+    }
+    if (form.pastDue === "Yes") {
+      steps.push({
+        timing: "Before the sticky meeting",
+        owner: "Implementation engineer",
+        action: "Payments look past due. A gentle follow-up would help before the meeting. The invoice detail can stay in Maxio.",
+        done: "The past-due question is No, or the follow-up is recorded."
+      });
+    }
+    if (form.shippedLines === "No") {
+      steps.push({
+        timing: "When there is a moment",
+        owner: "Implementation engineer",
+        action: "The 20,000 order-line mark is not checked yet. It may help to confirm current volume against that threshold.",
+        done: "Shipped order lines is marked Yes, or the team has agreed the threshold can wait."
+      });
+    }
+    if (form.consistentUsage === "No") {
+      steps.push({
+        timing: "Before the sticky meeting",
+        owner: "Implementation engineer",
+        action: "Two months of consistent usage is not in place yet. The sticky meeting can wait until that usage is there.",
+        done: "Consistent usage is marked Yes."
+      });
+    }
+  } else if (!steps.some((step) => step.level === "hold")) {
+    steps.push({
+      timing: "Next step",
+      owner: "Implementation engineer",
+      action: "The sticky form is the next step after Pre-Sticky. Filling it in shows whether a sign-off, scope, training, payment, or usage item is still open.",
+      done: "The sticky form has its answers, including the sign-off lines."
+    });
+  }
+  if (onAiList(item)) {
+    steps.push({
+      timing: "At the sticky meeting",
+      owner: "Implementation engineer",
+      action: "This customer is on the AI Adoption list. The sticky conversation can include a short invitation to that path.",
+      done: "AI adoption has been mentioned, or the team has agreed to leave it for later."
+    });
+  }
+  return steps;
+}
+
+function stickyLead(item, steps) {
+  if (steps.some((step) => step.level === "hold")) return "This is the next step after Pre-Sticky, and the account needs another look before the sticky meeting.";
+  if (!stickyStarted(item)) return "The sticky form is the next step after Pre-Sticky.";
+  if (!steps.length) return "Pre-Sticky is behind this account, and the sticky form looks settled. It can be brought to the sticky meeting.";
+  return "The sticky form is the next step after Pre-Sticky. A few items are still open.";
+}
+
+function stickyFormStatus(item) {
+  const filled = STICKY_FIELDS.filter((field) => String(item.stickyForm[field.key] || "").trim()).length;
+  if (!filled) return "Not started";
+  if (filled < STICKY_FIELDS.length) return `${filled}/${STICKY_FIELDS.length} filled`;
+  return stickySuggestions(item).some((step) => step.level === "hold") ? "Needs a look" : "Form complete";
+}
+
+function stickyFieldHtml(item, field) {
+  const value = item.stickyForm[field.key] || "";
+  if (field.type === "yesno") {
+    return `<label>${esc(field.label)}<select class="text" data-sticky="${field.key}"><option value="" ${value === "" ? "selected" : ""}>Select</option><option value="Yes" ${value === "Yes" ? "selected" : ""}>Yes</option><option value="No" ${value === "No" ? "selected" : ""}>No</option></select></label>`;
+  }
+  return `<label>${esc(field.label)}<input class="text" type="${field.type === "date" ? "date" : "text"}" data-sticky="${field.key}" value="${esc(value)}" /></label>`;
+}
+
+function stickyFormHtml(item) {
+  const people = STICKY_FIELDS.filter((field) => ["dateRequested", "requestedBy", "csm", "salesAe", "orderLines", "activatedDate"].includes(field.key));
+  const approvals = STICKY_FIELDS.filter((field) => ["onboardingApproval", "salesApproval"].includes(field.key));
+  const checks = STICKY_FIELDS.filter((field) => field.type === "yesno");
+  return `<section class="card kickoff sticky-sheet">
+    <div class="import-row"><label class="btn file-btn">Import sticky form Excel<input type="file" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-sticky-file /></label><p class="hint" data-sticky-status>Reads a sticky form workbook, with the question in column A and the answer in column B.</p></div>
+    <div class="sticky-fields">${people.map((field) => stickyFieldHtml(item, field)).join("")}</div>
+    <h2 class="span-3">Approvals</h2>
+    <div class="sticky-fields">${approvals.map((field) => stickyFieldHtml(item, field)).join("")}</div>
+    <h2 class="span-3">Select all applicable</h2>
+    <div class="sticky-fields">${checks.map((field) => stickyFieldHtml(item, field)).join("")}</div>
+    <label class="span-3">On the AI Adoption list<select class="text" data-sticky="aiAdoption"><option value="" ${item.stickyForm.aiAdoption === "" ? "selected" : ""}>Select</option><option value="Yes" ${item.stickyForm.aiAdoption === "Yes" ? "selected" : ""}>Yes</option><option value="No" ${item.stickyForm.aiAdoption === "No" ? "selected" : ""}>No</option></select></label>
+    <p class="hint span-3">${esc(aiAdoptionHint(item))} Leave this blank to follow the <a href="https://docs.google.com/spreadsheets/d/1mjr3-XtbDVAfKAgSdBOuElTSdZkzh6UoVilhYi8rkU0/edit" target="_blank" rel="noopener">AI Adoption document</a>. Yes or No overrides that list.</p>
+  </section>`;
+}
+
+function stickyPlanHtml(item) {
+  const steps = stickySuggestions(item);
+  const list = steps.map((step) => `<li><p class="meta">${esc(step.timing)} · ${esc(step.owner)}</p><p>${esc(step.action)}</p><p class="hint">Feels settled when ${esc(step.done.charAt(0).toLowerCase() + step.done.slice(1))}</p></li>`).join("");
+  return `<h2>Suggested plan</h2><p class="plan-lead">${esc(stickyLead(item, steps))}</p>${list ? `<ol class="plan-steps">${list}</ol>` : ""}<p class="hint">Suggestions for the sticky meeting, the next step after Pre-Sticky. The engineer can take them in any order.</p>`;
+}
+
+function stickyRailHtml(item) {
+  const scores = scorePair(item);
+  const warn = scores.average != null && scores.average < 3;
+  const headline = scores.average == null ? "—" : fmt(scores.average);
+  const status = scores.average == null ? "Scores needed" : warn ? "Below 3" : "At 3 or above";
+  return `
+    <p class="eyebrow">Sticky meeting</p>
+    <div class="big-score">${headline}</div>
+    <span class="pill ${warn ? "high" : scores.average != null ? "low" : ""}">${status}</span>
+    <p class="meta">Average of Activation and Pre-Sticky.</p>
+    <h2>Scores</h2>
+    <div class="driver"><span>Activation</span><b>${scores.activation.complete ? fmt(scores.activation.score) : "—"}</b></div>
+    <div class="driver"><span>Pre-Sticky</span><b>${scores.pre.complete ? fmt(scores.pre.score) : "—"}</b></div>
+    <p class="band-copy">An average under 3 means the account is not ready for the sticky meeting yet. Missing sign-off on the form becomes a suggestion to have it signed.</p>`;
+}
+
+function foldName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/^sample\s+[—–-]\s+/, "")
+    .replace(/\bfulfilment\b/g, "fulfillment")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function namesMatch(customer, listed) {
+  const left = foldName(customer);
+  const right = foldName(listed);
+  if (!left || !right || left.length < 3 || right.length < 3) return false;
+  if (left === right) return true;
+  const shorter = left.length <= right.length ? left : right;
+  const longer = left.length <= right.length ? right : left;
+  if (shorter.length >= 8 && longer.includes(shorter)) return true;
+  return longer.startsWith(`${shorter} `);
+}
+
+const AI_ADOPTION = [
+  "Priority Fulfillment", "Future Fulfilment - Pilot", "Future Fulfillment", "Howlett - Logiwa IO Migration", "Howlett",
+  "RXO", "American Warehouse - New Deal", "American Warehouse, Inc.", "KSP Fulfillment - New Deal", "KSP Fulfillment",
+  "GTH America - IO Migration", "GTH America - Non Deliverr", "OneLive - IO Migration", "OneLive", "Custom Back Office",
+  "Custom Back Office Solutions", "Velocity International Group", "Simpson Labs - IO Migration - CSM", "Simpson Labs",
+  "On Air Direct - IO Migration", "On Air Direct", "JKD", "Evolution Logistics", "Golden Bridge", "Harris Freeman",
+  "Amir Transports", "A to Z Drying", "Group Transport - IO Migration", "Favafill", "Product Fulfillment Solutions",
+  "Product Fulllment Solutions, Inc.", "OC3PL", "Admirari", "Valencia Fulfillment", "Inland Star", "Simple Global",
+  "Logistics Plus", "Dile Logistics", "California Olive Ranch", "Paleovalley", "Revelry", "GoodBuy Gear", "Good Buy Gear",
+  "Genesis Engineering", "Genesis Engineering Services", "Airyze", "7 Days Express", "YM Trading", "Komyo Logistics",
+  "Accurate Freight Systems", "WP Fulfillment", "Fanatics Topps", "Fanatics", "United Logistics", "World Pantry",
+  "Team 1 Supply", "Pepsi", "List Logistics", "Pronto", "Warehouseanywhere", "Fulfillment Australia", "Flofillment",
+  "Supplied Longevity", "National Commercial Warehouse (NCW)", "Flexport", "Deliverr Inc / Flexport", "Radial", "Sincro",
+  "Go Sincro Limited", "Drive Fulfillment", "Badger", "Badger Fulfillment Group Inc", "Veyer LLC", "Locad",
+  "Aviator Nation", "eShipper+", "JLab", "Pegasus Media & Logistics", "Calibrate Network", "Palletized",
+  "Annies Publishing (aka DRG Management, Inc.)", "eCom Logistics", "Shipflow", "Left Brain Logistics", "ShipTo Partners",
+  "3PL PROS, LLC.", "Magna-Tiles", "MV Sport", "Stockmatic", "Imogne + Willie", "MP Fulfillment, LLC (Priority Fulfillment)",
+  "Saddlepoint 3PL", "Velociraptor 3PL", "Logistic Angels"
+];
+
+function listedForAi(name) {
+  return AI_ADOPTION.some((listed) => namesMatch(name, listed));
+}
+
+function onAiList(item) {
+  if (item.stickyForm.aiAdoption === "No") return false;
+  if (item.stickyForm.aiAdoption === "Yes") return true;
+  return listedForAi(item.name);
+}
+
+function aiAdoptionHint(item) {
+  if (item.stickyForm.aiAdoption === "Yes") return "Marked Yes on this form.";
+  if (item.stickyForm.aiAdoption === "No") return "Marked No, so a document match is set aside.";
+  if (listedForAi(item.name)) return "This name is on the AI Adoption document.";
+  return "This name was not found on the AI Adoption document.";
+}
+
+function normalizeYesNo(value) {
+  const text = String(value || "").trim();
+  if (/^y/i.test(text)) return "Yes";
+  if (/^n/i.test(text)) return "No";
+  return "";
+}
+
+function normalizeDate(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  const serial = Number(text);
+  if (serial > 20000 && serial < 80000) {
+    const utc = new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000);
+    return utc.toISOString().slice(0, 10);
+  }
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const day = String(parsed.getDate()).padStart(2, "0");
+    return `${parsed.getFullYear()}-${month}-${day}`;
+  }
+  return "";
+}
+
+function applyStickyWorkbook(workbook, item) {
+  let matched = 0;
+  let workbookName = "";
+  workbook.SheetNames.some((name) => {
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: "", raw: false });
+    rows.forEach((row) => {
+      const label = String(row[0] || "").replace(/\s+/g, " ").trim();
+      const value = row[1];
+      if (/customer name/i.test(label)) {
+        workbookName = String(value || "").trim();
+        return;
+      }
+      const field = STICKY_FIELDS.find((itemField) => itemField.match.test(label));
+      if (!field) return;
+      const next = field.type === "yesno" ? normalizeYesNo(value) : field.type === "date" ? normalizeDate(value) : String(value || "").trim();
+      item.stickyForm[field.key] = next;
+      if (String(value || "").trim()) matched += 1;
+    });
+    return matched > 0;
+  });
+  if (!matched) throw new Error("This workbook does not look like a sticky form. Use the sheet with questions in column A and answers in column B.");
+  item.stickyForm.updatedAt = new Date().toISOString();
+  const who = workbookName ? ` for ${workbookName}` : "";
+  return `Imported sticky form${who}.`;
+}
+
+function readStickyFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const status = () => document.querySelector("[data-sticky-status]");
+    try {
+      if (typeof XLSX === "undefined") throw new Error("The Excel reader did not load. Refresh the page and try again.");
+      const found = currentCustomer();
+      if (!found) return;
+      const workbook = XLSX.read(new Uint8Array(reader.result), { type: "array" });
+      const summary = applyStickyWorkbook(workbook, found.item);
+      save();
+      render();
+      const line = status();
+      if (line) line.textContent = summary;
+    } catch (err) {
+      const line = status();
+      if (line) line.textContent = err.message || "That workbook could not be read.";
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 let state = load();
@@ -702,16 +1039,18 @@ function newView() {
 function customerView(current) {
   const item = customerById(current.id);
   if (!item) return `${shell("")}<main class="wrap"><a class="back" href="#/">Back</a><div class="card empty"><h2>Customer not found</h2></div></main>`;
-  const phase = phaseById(current.phase) || PHASES[0];
-  const result = evaluate(item, phase.id);
+  const stickyForm = current.phase === "sticky-form";
+  const phase = stickyForm ? null : (phaseById(current.phase) || PHASES[0]);
+  const result = phase ? evaluate(item, phase.id) : null;
+  const updated = stickyForm ? item.stickyForm.updatedAt : item.phases[phase.id].updatedAt;
   return `
-    ${shell(phase.purpose)}
+    ${shell(stickyForm ? "The next step after Pre-Sticky. Decide whether this account is ready for the sticky meeting." : phase.purpose)}
     <main class="wrap">
       <div class="page-head">
         <div>
           <a class="back" href="#/">All customers</a>
           <input class="name-input" data-field="name" value="${esc(item.name)}" aria-label="Customer name" />
-          <p class="meta" id="updated-line">${item.sample ? "Sample record · " : ""}Last change ${esc(when(item.phases[phase.id].updatedAt))}</p>
+          <p class="meta" id="updated-line">${item.sample ? "Sample record · " : ""}Last change ${esc(when(updated))}</p>
         </div>
         <button class="btn quiet" data-action="delete" data-id="${esc(item.id)}">Delete customer</button>
       </div>
@@ -734,12 +1073,12 @@ function customerView(current) {
         ${item.kickoff.integrations ? `<p class="hint span-3">Earlier combined list: ${esc(item.kickoff.integrations)}. Move each name into marketplace or carrier above.</p>` : ""}
         <label class="span-3">Kickoff notes<textarea data-kickoff="notes">${esc(item.kickoff.notes)}</textarea></label>
       </section>
-      <nav class="tabs">${PHASES.map((itemPhase) => tab(item, itemPhase, phase.id)).join("")}</nav>
-      <section class="card plan" id="plan">${planHtml(item, phase, result)}</section>
+      <nav class="tabs">${PHASES.map((itemPhase) => tab(item, itemPhase, phase && phase.id)).join("")}${stickyFormTab(item, stickyForm)}</nav>
+      ${stickyForm ? `${stickyFormHtml(item)}<section class="layout"><div><section class="card plan" id="plan">${stickyPlanHtml(item)}</section></div><aside class="rail" id="rail">${stickyRailHtml(item)}</aside></section>` : `<section class="card plan" id="plan">${planHtml(item, phase, result)}</section>
       <section class="layout">
         <div class="questions" id="questions">${questionsHtml(item, phase)}</div>
         <aside class="rail" id="rail">${railHtml(item, phase, result)}</aside>
-      </section>
+      </section>`}
     </main>`;
 }
 
@@ -1066,7 +1405,11 @@ function readKickoffFile(file) {
 function tab(item, phase, active) {
   const result = evaluate(item, phase.id);
   const label = result.complete ? `${fmt(result.score)} · ${BANDS[result.band].label}` : result.answered.length ? `${result.answered.length}/${result.applicable.length} answered` : "Not started";
-  return `<a class="tab" href="#/customer/${encodeURIComponent(item.id)}?phase=${phase.id}" aria-selected="${phase.id === active}"><b>${esc(phase.name)}</b><span class="meta">${label}</span></a>`;
+  return `<a class="tab" data-phase="${phase.id}" href="#/customer/${encodeURIComponent(item.id)}?phase=${phase.id}" aria-selected="${phase.id === active}"><b>${esc(phase.name)}</b><span class="meta">${label}</span></a>`;
+}
+
+function stickyFormTab(item, active) {
+  return `<a class="tab" data-phase="sticky-form" href="#/customer/${encodeURIComponent(item.id)}?phase=sticky-form" aria-selected="${active}"><b>Sticky form</b><span class="meta">${esc(stickyFormStatus(item))}</span></a>`;
 }
 
 function questionsHtml(item, phase) {
@@ -1199,7 +1542,8 @@ function planHtml(item, phase, result) {
   const paymentNote = payment && !drivers.some((entry) => entry.metric.id === "payment")
     ? `<p class="hint">${esc(payment.answer.score === 1 ? "Payments may also need a closer follow-up. The invoice detail can stay in Maxio." : "There is also a small payment follow-up. The invoice detail can stay in Maxio.")}</p>`
     : "";
-  return `<h2>Suggested plan</h2><p class="plan-lead">${esc(planLead(phase, result))}</p>${steps ? `<ol class="plan-steps">${steps}</ol>` : ""}${quiet}${paymentNote}<p class="hint">Suggestions from this phase’s scores. The engineer can take them in any order.</p>`;
+  const next = phase.id === "sticky" && result.complete ? `<p class="hint">The next step after Pre-Sticky is the Sticky form.</p>` : "";
+  return `<h2>Suggested plan</h2><p class="plan-lead">${esc(planLead(phase, result))}</p>${steps ? `<ol class="plan-steps">${steps}</ol>` : ""}${quiet}${paymentNote}${next}<p class="hint">Suggestions from this phase’s scores. The engineer can take them in any order.</p>`;
 }
 
 function railHtml(item, phase, result) {
@@ -1228,16 +1572,40 @@ function touch(item, phaseId) {
 }
 
 function paint(item, phase) {
+  if (!phase) {
+    paintSticky(item);
+    return;
+  }
   const result = evaluate(item, phase.id);
   document.getElementById("rail").innerHTML = railHtml(item, phase, result);
   const plan = document.getElementById("plan");
   if (plan) plan.innerHTML = planHtml(item, phase, result);
   const updated = document.getElementById("updated-line");
   if (updated) updated.textContent = `${item.sample ? "Sample record · " : ""}Last change ${when(item.phases[phase.id].updatedAt)}`;
-  document.querySelectorAll(".tab").forEach((tabEl, index) => {
-    const resultForTab = evaluate(item, PHASES[index].id);
-    const label = resultForTab.complete ? `${fmt(resultForTab.score)} · ${BANDS[resultForTab.band].label}` : resultForTab.answered.length ? `${resultForTab.answered.length}/${resultForTab.applicable.length} answered` : "Not started";
-    tabEl.querySelector(".meta").textContent = label;
+  refreshTabs(item);
+}
+
+function paintSticky(item) {
+  const plan = document.getElementById("plan");
+  if (plan) plan.innerHTML = stickyPlanHtml(item);
+  const rail = document.getElementById("rail");
+  if (rail) rail.innerHTML = stickyRailHtml(item);
+  const updated = document.getElementById("updated-line");
+  if (updated) updated.textContent = `${item.sample ? "Sample record · " : ""}Last change ${when(item.stickyForm.updatedAt)}`;
+  refreshTabs(item);
+}
+
+function refreshTabs(item) {
+  document.querySelectorAll(".tab").forEach((tabEl) => {
+    const id = tabEl.dataset.phase;
+    const meta = tabEl.querySelector(".meta");
+    if (!meta) return;
+    if (id === "sticky-form") {
+      meta.textContent = stickyFormStatus(item);
+      return;
+    }
+    const resultForTab = evaluate(item, id);
+    meta.textContent = resultForTab.complete ? `${fmt(resultForTab.score)} · ${BANDS[resultForTab.band].label}` : resultForTab.answered.length ? `${resultForTab.answered.length}/${resultForTab.applicable.length} answered` : "Not started";
   });
 }
 
@@ -1245,8 +1613,10 @@ function currentCustomer() {
   const current = route();
   if (current.name !== "customer") return null;
   const item = customerById(current.id);
+  if (!item) return null;
+  if (current.phase === "sticky-form") return { item, phase: null, stickyForm: true };
   const phase = phaseById(current.phase) || PHASES[0];
-  return item ? { item, phase } : null;
+  return { item, phase, stickyForm: false };
 }
 
 document.body.addEventListener("click", (event) => {
@@ -1404,7 +1774,12 @@ document.body.addEventListener("input", (event) => {
       if (hint) hint.textContent = el.value ? `Kickoff / contract baseline: ${el.value}` : "Add the expected volume in the kickoff record before judging this match.";
     }
   }
+  if (el.dataset.sticky) {
+    saveStickyField(found.item, el.dataset.sticky, el.value);
+    return;
+  }
   if (el.dataset.note) {
+    if (!found.phase) return;
     answerFor(found.item, found.phase.id, el.dataset.note).note = el.value;
     touch(found.item, found.phase.id);
   }
@@ -1455,7 +1830,26 @@ document.body.addEventListener("submit", (event) => {
   location.hash = `#/customer/${encodeURIComponent(item.id)}?phase=early`;
 });
 
+function saveStickyField(item, key, value) {
+  item.stickyForm[key] = value;
+  item.stickyForm.updatedAt = new Date().toISOString();
+  save();
+  paintSticky(item);
+}
+
 document.body.addEventListener("change", (event) => {
+  if (event.target.matches && event.target.matches("[data-sticky]")) {
+    const found = currentCustomer();
+    if (!found) return;
+    saveStickyField(found.item, event.target.dataset.sticky, event.target.value);
+    return;
+  }
+  if (event.target.matches && event.target.matches("[data-sticky-file]")) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (file) readStickyFile(file);
+    return;
+  }
   if (event.target.matches && event.target.matches("[data-kickoff-file]")) {
     const file = event.target.files && event.target.files[0];
     event.target.value = "";
