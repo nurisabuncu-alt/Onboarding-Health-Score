@@ -1088,7 +1088,7 @@ function field(label, key, value, type, kickoff) {
 }
 
 function kickoffImportRow() {
-  return `<div class="import-row"><label class="btn file-btn">Import kickoff Excel<input type="file" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-kickoff-file /></label><p class="hint" data-import-status>Reads the Project Details and Integration sections of the kickoff workbook.</p></div>`;
+  return `<div class="import-row"><label class="btn file-btn">Import kickoff Excel<input type="file" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-kickoff-file /></label><p class="hint" data-import-status>Reads Project Details, Business Goals, and Integration answers. The customer name comes from the file name.</p></div>`;
 }
 
 function comboHtml(key, label, selected, placeholder) {
@@ -1253,12 +1253,28 @@ function parseKickoffSheet(workbook) {
     found = parseKickoffRows(rows);
     return !!found;
   });
-  if (!found) throw new Error("This workbook does not have Project Details or Integration answers. Use the kickoff sheet with Topic, Questions, and Answer columns.");
+  if (!found) throw new Error("This workbook does not have Project Details, Business Goals, or Integration answers. Use the kickoff sheet with Slide, Topic, Questions, and Answer columns.");
   return found;
+}
+
+function headerIdentity(rows) {
+  let customerName = "";
+  let engineer = "";
+  rows.forEach((row) => {
+    (row || []).forEach((cell) => {
+      const text = String(cell || "").replace(/\s+/g, " ").trim();
+      const customer = text.match(/^customer\s*:\s*(.+)$/i);
+      const person = text.match(/^engineer\s*:\s*(.+)$/i);
+      if (customer) customerName = customer[1].trim();
+      if (person) engineer = person[1].trim();
+    });
+  });
+  return { customerName, engineer };
 }
 
 function parseKickoffRows(rows) {
   let header = -1;
+  let slideCol = -1;
   let topicCol = 0;
   let questionCol = 0;
   let answerCol = 0;
@@ -1269,6 +1285,7 @@ function parseKickoffRows(rows) {
     const answer = row.findIndex((cell) => cell === "answer" || cell === "answers");
     if (topic >= 0 && question >= 0 && answer >= 0) {
       header = index;
+      slideCol = row.findIndex((cell) => cell === "slide");
       topicCol = topic;
       questionCol = question;
       answerCol = answer;
@@ -1276,21 +1293,36 @@ function parseKickoffRows(rows) {
     }
   }
   if (header < 0) return null;
+  let slide = "";
   let topic = "";
   const details = [];
   const integrations = [];
+  const goals = [];
   for (let index = header + 1; index < rows.length; index += 1) {
     const row = rows[index] || [];
+    const slideCell = slideCol >= 0 ? String(row[slideCol] || "").trim() : "";
     const topicCell = String(row[topicCol] || "").trim();
+    if (slideCell) slide = slideCell;
     if (topicCell) topic = topicCell;
     const question = String(row[questionCol] || "").trim();
     const answer = String(row[answerCol] || "").trim();
     if (!question && !answer) continue;
-    if (/project detail/i.test(topic)) details.push({ question, answer });
+    if (/business\s*goals?/i.test(slide)) goals.push({ question, answer });
+    else if (/project detail/i.test(topic)) details.push({ question, answer });
     else if (/^integration$/i.test(topic)) integrations.push({ question, answer });
   }
-  if (!details.length && !integrations.length) return null;
-  return { details, integrations };
+  if (!details.length && !integrations.length && !goals.length) return null;
+  return { details, integrations, goals, ...headerIdentity(rows) };
+}
+
+function customerNameFromFile(filename) {
+  let name = String(filename || "").replace(/\.[^.]+$/i, "").replace(/[_]+/g, " ").trim();
+  name = name.replace(/\s*-\s*new logiwa\s*$/i, "").trim();
+  name = name.replace(/\s*kick-?off questions\s*$/i, "").trim();
+  name = name.replace(/^kick-?off questions\s*[-–—]\s*/i, "").trim();
+  name = name.replace(/\s*kick-?off\s*$/i, "").trim();
+  name = name.replace(/^kick-?off\s*[-–—]\s*/i, "").trim();
+  return name.replace(/\s+/g, " ").trim();
 }
 
 function applyKickoff(parsed, kickoff) {
@@ -1336,6 +1368,15 @@ function applyKickoff(parsed, kickoff) {
     kickoff.unsupported = split.unsupported;
     delete kickoff.developing;
   }
+  const goalLines = [];
+  (parsed.goals || []).forEach(({ question, answer }) => {
+    if (!answer) return;
+    if (/orders?.{0,20}(a day|per day|daily)|processed a day/i.test(question) && !String(kickoff.volume || "").trim()) {
+      kickoff.volume = /^\d[\d,]*$/.test(answer.trim()) ? `${answer.trim()} orders/day` : answer.trim();
+    }
+    goalLines.push(`${question}\n${answer}`);
+  });
+  if (goalLines.length) lines.push(`Business Goals\n${goalLines.join("\n\n")}`);
   if (lines.length) {
     const marker = "Imported from kickoff Excel";
     const before = String(kickoff.notes || "").split(marker)[0].trim();
@@ -1350,7 +1391,9 @@ function applyKickoff(parsed, kickoff) {
   if (kickoff.carriers.length) parts.push(`carriers: ${kickoff.carriers.join(", ")}`);
   if (kickoff.custom && kickoff.custom.length) parts.push(`may require customization: ${kickoff.custom.join(", ")}`);
   if (kickoff.unsupported && kickoff.unsupported.length) parts.push(`not pre-built: ${kickoff.unsupported.join(", ")}`);
-  return parts.length ? `Imported kickoff · ${parts.join(" · ")}` : "No Project Details or Integration answers were found in that workbook.";
+  if ((parsed.goals || []).some((item) => item.answer)) parts.push("business goals captured");
+  if (kickoff.volume) parts.push(`volume: ${kickoff.volume}`);
+  return parts.length ? `Imported kickoff · ${parts.join(" · ")}` : "No Project Details, Business Goals, or Integration answers were found in that workbook.";
 }
 
 function countPhrase(answer, singular, plural) {
@@ -1367,20 +1410,27 @@ function readKickoffFile(file) {
       if (typeof XLSX === "undefined") throw new Error("The Excel reader did not load. Refresh the page and try again.");
       const workbook = XLSX.read(new Uint8Array(reader.result), { type: "array" });
       const parsed = parseKickoffSheet(workbook);
+      const named = customerNameFromFile(file.name) || parsed.customerName || "";
       const found = currentCustomer();
       if (found) {
+        const appliedName = named && !String(found.item.name || "").trim() ? (found.item.name = named) : "";
+        if (parsed.engineer && !String(found.item.engineer || "").trim()) found.item.engineer = parsed.engineer;
         const summary = applyKickoff(parsed, found.item.kickoff);
         save();
         render();
         const line = status();
-        if (line) line.textContent = summary;
+        if (line) line.textContent = appliedName ? `${summary} · customer: ${appliedName}` : summary;
         return;
       }
-      const draft = { warehouses: "", users: "", clients: "", apiUsers: "", notes: "", marketplaces: [], carriers: [], custom: [], unsupported: [] };
+      const draft = { warehouses: "", users: "", clients: "", apiUsers: "", volume: "", notes: "", marketplaces: [], carriers: [], custom: [], unsupported: [] };
       const form = document.getElementById("new-form");
       if (form) draft.notes = String(new FormData(form).get("notes") || "");
       const summary = applyKickoff(parsed, draft);
-      ["warehouses", "users", "clients", "apiUsers", "notes"].forEach((key) => {
+      const nameInput = form && form.querySelector('[name="name"]');
+      const appliedName = nameInput && named && !String(nameInput.value || "").trim() ? (nameInput.value = named) : "";
+      const engineerInput = form && form.querySelector('[name="engineer"]');
+      if (engineerInput && parsed.engineer && !String(engineerInput.value || "").trim()) engineerInput.value = parsed.engineer;
+      ["warehouses", "users", "clients", "apiUsers", "volume", "notes"].forEach((key) => {
         const input = form && form.querySelector(`[name="${key}"]`);
         if (input) input.value = draft[key] || "";
       });
@@ -1393,7 +1443,7 @@ function readKickoffFile(file) {
       const missing = form && form.querySelector("[data-unsupported]");
       if (missing) writeUnsupported(missing, draft.unsupported || []);
       const line = status();
-      if (line) line.textContent = summary;
+      if (line) line.textContent = appliedName ? `${summary} · customer: ${appliedName}` : summary;
     } catch (err) {
       const line = status();
       if (line) line.textContent = err.message || "That workbook could not be read.";
