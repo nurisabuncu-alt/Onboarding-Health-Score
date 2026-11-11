@@ -1,4 +1,4 @@
-const KEY = "onboarding-health-score-v1";
+const KEY = "onboarding-health-score-v2";
 
 const BANDS = {
   high: {
@@ -105,8 +105,9 @@ function load() {
       const saved = JSON.parse(raw);
       if (saved && Array.isArray(saved.customers)) loaded = saved;
     }
-  } catch (err) { /* replace an unreadable save with the sample book */ }
-  if (!loaded) loaded = { customers: samples() };
+  } catch (err) { /* start again with an empty customer list */ }
+  if (!loaded) loaded = { customers: [] };
+  try { localStorage.removeItem("onboarding-health-score-v1"); } catch (err) { /* the old list is already gone */ }
   loaded.customers.forEach(normalizeCustomer);
   localStorage.setItem(KEY, JSON.stringify(loaded));
   return loaded;
