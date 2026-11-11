@@ -433,7 +433,7 @@ const STICKY_FIELDS = [
 ];
 
 function emptyStickyForm() {
-  const form = { updatedAt: "", aiEligible: "", aiEnabled: "" };
+  const form = { updatedAt: "", aiEligible: "", aiSigned: "" };
   STICKY_FIELDS.forEach((field) => { form[field.key] = ""; });
   return form;
 }
@@ -442,6 +442,7 @@ function normalizeStickyForm(item) {
   const current = item.stickyForm && typeof item.stickyForm === "object" ? item.stickyForm : {};
   item.stickyForm = { ...emptyStickyForm(), ...current };
   delete item.stickyForm.aiAdoption;
+  delete item.stickyForm.aiEnabled;
 }
 
 function stickyStarted(item) {
@@ -550,19 +551,12 @@ function stickySuggestions(item) {
     });
   }
   const ai = aiAnswers(item);
-  if (ai.eligible.value === "Yes" && ai.enabled.value !== "Yes") {
+  if (ai.eligible.value === "Yes" && ai.signed.value === "Yes" && ai.record && (!ai.record.activated || !ai.record.using)) {
     steps.push({
       timing: "At the sticky meeting",
       owner: "Implementation engineer",
-      action: "This customer is AI eligible and not enabled yet. The sticky conversation can include a short invitation to turn it on.",
-      done: "AI enablement has been mentioned, or the team has agreed to leave it for later."
-    });
-  } else if (ai.enabled.value === "Yes") {
-    steps.push({
-      timing: "At the sticky meeting",
-      owner: "Implementation engineer",
-      action: "AI is already enabled for this customer. The sticky conversation can include a short check that it is in use.",
-      done: "The team has noted whether AI is in use."
+      action: "Please work with the Customer with AI enablement and make sure AI usage.",
+      done: "AI is activated and in use, or the team has agreed to leave it for later."
     });
   }
   return steps;
@@ -601,7 +595,7 @@ function stickyFormHtml(item) {
     <div class="sticky-fields">${approvals.map((field) => stickyFieldHtml(item, field)).join("")}</div>
     <h2 class="span-3">Select all applicable</h2>
     <div class="sticky-fields">${checks.map((field) => stickyFieldHtml(item, field)).join("")}</div>
-    <div class="sticky-fields">${aiSelectHtml(item, "aiEligible", "AI Eligible?")}${aiSelectHtml(item, "aiEnabled", "AI Enabled?")}</div>
+    <div class="sticky-fields">${aiSelectHtml(item, "aiEligible", "AI Eligible?")}${aiSelectHtml(item, "aiSigned", "AI Signed / Convinced")}</div>
     <p class="hint span-3">${esc(aiHint(item))} <a href="https://docs.google.com/spreadsheets/d/1mjr3-XtbDVAfKAgSdBOuElTSdZkzh6UoVilhYi8rkU0/edit" target="_blank" rel="noopener">AI Adoption document</a></p>
   </section>`;
 }
@@ -656,120 +650,110 @@ function namesMatch(customer, listed) {
 }
 
 const AI_CUSTOMERS = [
-{ name: "Priority Fulfillment", eligible: true, enabled: true },
-  { name: "Future Fulfilment - Pilot", eligible: true, enabled: true },
-  { name: "Howlett - Logiwa IO Migration", eligible: false, enabled: true },
-  { name: "RXO", eligible: false, enabled: false },
-  { name: "American Warehouse - New Deal", eligible: false, enabled: true },
-  { name: "KSP Fulfillment - New Deal", eligible: true, enabled: true },
-  { name: "GTH America - IO Migration", eligible: false, enabled: true },
-  { name: "OneLive - IO Migration", eligible: true, enabled: true },
-  { name: "Custom Back Office", eligible: true, enabled: true },
-  { name: "Velocity International Group", eligible: false, enabled: true },
-  { name: "Simpson Labs - IO Migration - CSM", eligible: true, enabled: true },
-  { name: "On Air Direct - IO Migration", eligible: true, enabled: true },
-  { name: "JKD", eligible: false, enabled: true },
-  { name: "Evolution Logistics", eligible: false, enabled: false },
-  { name: "Golden Bridge", eligible: false, enabled: false },
-  { name: "Harris Freeman", eligible: false, enabled: false },
-  { name: "Amir Transports", eligible: false, enabled: false },
-  { name: "A to Z Drying", eligible: false, enabled: false },
-  { name: "Group Transport - IO Migration", eligible: false, enabled: false },
-  { name: "Favafill", eligible: false, enabled: false },
-  { name: "Product Fulfillment Solutions", eligible: true, enabled: true },
-  { name: "OC3PL", eligible: true, enabled: false },
-  { name: "Admirari", eligible: false, enabled: false },
-  { name: "Valencia Fulfillment", eligible: false, enabled: false },
-  { name: "Inland Star", eligible: false, enabled: false },
-  { name: "Simple Global", eligible: true, enabled: true },
-  { name: "Logistics Plus", eligible: true, enabled: true },
-  { name: "Dile Logistics", eligible: false, enabled: false },
-  { name: "California Olive Ranch", eligible: false, enabled: false },
-  { name: "Paleovalley", eligible: false, enabled: false },
-  { name: "Revelry", eligible: false, enabled: false },
-  { name: "GoodBuy Gear", eligible: true, enabled: false },
-  { name: "Genesis Engineering", eligible: false, enabled: false },
-  { name: "Airyze", eligible: false, enabled: false },
-  { name: "7 Days Express", eligible: false, enabled: false },
-  { name: "YM Trading", eligible: false, enabled: false },
-  { name: "Komyo Logistics", eligible: false, enabled: false },
-  { name: "Accurate Freight Systems", eligible: false, enabled: false },
-  { name: "WP Fulfillment", eligible: false, enabled: false },
-  { name: "Fanatics Topps", eligible: true, enabled: true },
-  { name: "United Logistics", eligible: false, enabled: false },
-  { name: "Genesis Engineering Services", eligible: false, enabled: false },
-  { name: "World Pantry", eligible: true, enabled: false },
-  { name: "Team 1 Supply", eligible: false, enabled: true },
-  { name: "Pepsi", eligible: true, enabled: false },
-  { name: "List Logistics", eligible: true, enabled: false },
-  { name: "Pronto", eligible: false, enabled: false },
-  { name: "Warehouseanywhere", eligible: false, enabled: false },
-  { name: "Fulfillment Australia", eligible: true, enabled: false },
-  { name: "Flofillment", eligible: false, enabled: false },
-  { name: "Supplied Longevity", eligible: false, enabled: true },
-  { name: "National Commercial Warehouse (NCW)", eligible: false, enabled: false },
-  { name: "Flexport", eligible: true, enabled: true },
-  { name: "Radial", eligible: true, enabled: true },
-  { name: "Sincro", eligible: true, enabled: true },
-  { name: "Drive Fulfillment", eligible: true, enabled: true },
-  { name: "Badger", eligible: true, enabled: true },
-  { name: "Veyer LLC", eligible: true, enabled: false },
-  { name: "Locad", eligible: true, enabled: false },
-  { name: "Aviator Nation", eligible: false, enabled: false },
-  { name: "eShipper+", eligible: true, enabled: false },
-  { name: "Go Sincro Limited", eligible: true, enabled: true },
-  { name: "Lateral Fulfillment (aka Wisdom Fulfillment LLC)", eligible: false, enabled: false },
-  { name: "Knight Swift Warehouse and Fulfillment", eligible: false, enabled: false },
-  { name: "Bacarella Transportation Services (aka BTX Fulfillment/Liftwing)", eligible: false, enabled: false },
-  { name: "JLab", eligible: false, enabled: false },
-  { name: "Good Buy Gear", eligible: true, enabled: false },
-  { name: "Pegasus Media & Logistics", eligible: false, enabled: true },
-  { name: "PTS Fulfillment Services Inc", eligible: false, enabled: false },
-  { name: "Konami Gaming", eligible: false, enabled: false },
-  { name: "Calibrate Network", eligible: true, enabled: true },
-  { name: "Palletized", eligible: true, enabled: false },
-  { name: "Annies Publishing (aka DRG Management, Inc.)", eligible: true, enabled: false },
-  { name: "ORC industries", eligible: false, enabled: false },
-  { name: "RugPadUSA", eligible: false, enabled: false },
-  { name: "Product Fulllment Solutions, Inc.", eligible: true, enabled: true },
-  { name: "eCom Logistics", eligible: true, enabled: false },
-  { name: "Beautylish, Inc.", eligible: false, enabled: false },
-  { name: "National Commercial Warehouse (aka Revitalize Industries)", eligible: false, enabled: false },
-  { name: "Shipflow", eligible: true, enabled: false },
-  { name: "The Armstrong Company", eligible: false, enabled: false },
-  { name: "Left Brain Logistics", eligible: true, enabled: false },
-  { name: "ShipTo Partners", eligible: true, enabled: false },
-  { name: "3PL PROS, LLC.", eligible: true, enabled: false },
-  { name: "Magna-Tiles", eligible: false, enabled: true },
-  { name: "Advance Warehouse and Logistics", eligible: false, enabled: false },
-  { name: "MV Sport", eligible: true, enabled: false },
-  { name: "Broad Reach Logistics", eligible: false, enabled: false },
-  { name: "Recurrent Energy Power Services", eligible: false, enabled: false },
-  { name: "XO Logistics", eligible: false, enabled: false },
-  { name: "Stockmatic", eligible: true, enabled: false },
-  { name: "Imogne + Willie", eligible: false, enabled: true },
-  { name: "Pro-Built Logistics", eligible: false, enabled: false },
-  { name: "Handled Commerce (aka E-comm Filfillment)", eligible: false, enabled: false },
-  { name: "Saddlepoint 3PL", eligible: false, enabled: true },
-  { name: "Group Transport Inc.", eligible: false, enabled: false },
-  { name: "Velociraptor 3PL", eligible: false, enabled: true },
-  { name: "Malark Logistics", eligible: false, enabled: false },
-  { name: "GTH America - Non Deliverr", eligible: false, enabled: true },
-  { name: "Epic Charter Schools", eligible: false, enabled: false },
-  { name: "Logistic Angels", eligible: true, enabled: false },
-  { name: "Mantoria", eligible: false, enabled: false },
-  { name: "American Warehouse, Inc.", eligible: false, enabled: true },
-  { name: "Hydrofarm", eligible: false, enabled: false },
-  { name: "Shiptroy", eligible: false, enabled: false },
-  { name: "Lynch Logistics", eligible: false, enabled: false },
-  { name: "Art Creativity / Efficiency Experts", eligible: false, enabled: false },
-  { name: "Hyverhub", eligible: false, enabled: false },
-  { name: "United Warehouse", eligible: false, enabled: false },
-  { name: "Booksify Trading INC", eligible: false, enabled: false },
-  { name: "Waff Logistics", eligible: false, enabled: false },
-  { name: "Dile Solutions", eligible: false, enabled: false },
-  { name: "Warehouse anywhere", eligible: false, enabled: false },
-  { name: "shipstow", eligible: false, enabled: false }
+  { name: "Deliverr Inc / Flexport", eligible: true, signed: true, activated: true, using: true },
+  { name: "Radial", eligible: true, signed: true, activated: true, using: true },
+  { name: "Veyer LLC", eligible: true, signed: false, activated: false, using: false },
+  { name: "Locad", eligible: true, signed: false, activated: false, using: false },
+  { name: "Future Fulfillment", eligible: true, signed: true, activated: true, using: true },
+  { name: "Drive Fulfillment", eligible: true, signed: true, activated: true, using: true },
+  { name: "Aviator Nation", eligible: false, signed: true, activated: false, using: false },
+  { name: "eShipper+", eligible: true, signed: true, activated: false, using: false },
+  { name: "Simple Global", eligible: true, signed: true, activated: true, using: false },
+  { name: "Go Sincro Limited", eligible: true, signed: true, activated: true, using: true },
+  { name: "Lateral Fulfillment (aka Wisdom Fulfillment LLC)", eligible: false, signed: false, activated: false, using: false },
+  { name: "Knight Swift Warehouse and Fulfillment", eligible: false, signed: false, activated: false, using: false },
+  { name: "Paleovalley", eligible: false, signed: true, activated: false, using: false },
+  { name: "Bacarella Transportation Services (aka BTX Fulfillment/Liftwing)", eligible: false, signed: false, activated: false, using: false },
+  { name: "JLab", eligible: false, signed: true, activated: false, using: false },
+  { name: "Good Buy Gear", eligible: true, signed: true, activated: false, using: false },
+  { name: "RXO Freight Forwarding, Inc.", eligible: false, signed: false, activated: false, using: false },
+  { name: "Pegasus Media & Logistics", eligible: false, signed: false, activated: true, using: false },
+  { name: "Custom Back Office Solutions", eligible: true, signed: true, activated: true, using: false },
+  { name: "PTS Fulfillment Services Inc", eligible: false, signed: false, activated: false, using: false },
+  { name: "Konami Gaming", eligible: false, signed: false, activated: false, using: false },
+  { name: "Badger Fulfillment Group Inc", eligible: true, signed: true, activated: true, using: true },
+  { name: "Revelry", eligible: false, signed: false, activated: false, using: false },
+  { name: "OneLive", eligible: true, signed: true, activated: true, using: true },
+  { name: "Calibrate Network", eligible: true, signed: true, activated: true, using: true },
+  { name: "Palletized", eligible: true, signed: true, activated: false, using: false },
+  { name: "Annies Publishing (aka DRG Management, Inc.)", eligible: true, signed: false, activated: false, using: false },
+  { name: "Inland Star Distribution Centers", eligible: false, signed: false, activated: false, using: false },
+  { name: "ORC industries", eligible: false, signed: false, activated: false, using: false },
+  { name: "RugPadUSA", eligible: false, signed: false, activated: false, using: false },
+  { name: "Product Fulllment Solutions, Inc.", eligible: true, signed: true, activated: true, using: true },
+  { name: "eCom Logistics", eligible: true, signed: false, activated: false, using: false },
+  { name: "Valencia Fulfillment", eligible: false, signed: false, activated: false, using: false },
+  { name: "Admirari Supply ChainSolutions LLC", eligible: false, signed: false, activated: false, using: false },
+  { name: "Beautylish, Inc.", eligible: false, signed: false, activated: false, using: false },
+  { name: "On Air Direct", eligible: true, signed: true, activated: true, using: false },
+  { name: "National Commercial Warehouse (aka Revitalize Industries)", eligible: false, signed: false, activated: false, using: false },
+  { name: "Shipflow", eligible: true, signed: false, activated: false, using: false },
+  { name: "The Armstrong Company", eligible: false, signed: false, activated: false, using: false },
+  { name: "Left Brain Logistics", eligible: true, signed: true, activated: false, using: false },
+  { name: "A to Z Drying", eligible: false, signed: false, activated: false, using: false },
+  { name: "ShipTo Partners", eligible: true, signed: false, activated: false, using: false },
+  { name: "3PL PROS, LLC.", eligible: true, signed: false, activated: false, using: false },
+  { name: "Magna-Tiles", eligible: false, signed: false, activated: true, using: false },
+  { name: "Advance Warehouse and Logistics", eligible: false, signed: false, activated: false, using: false },
+  { name: "Evolution Logistics", eligible: false, signed: false, activated: false, using: false },
+  { name: "MV Sport", eligible: true, signed: true, activated: false, using: false },
+  { name: "Broad Reach Logistics", eligible: false, signed: false, activated: false, using: false },
+  { name: "Simpson Labs", eligible: true, signed: true, activated: true, using: true },
+  { name: "Recurrent Energy Power Services", eligible: false, signed: false, activated: false, using: false },
+  { name: "KSP Fulfillment", eligible: true, signed: true, activated: true, using: true },
+  { name: "California Olive Ranch", eligible: false, signed: false, activated: false, using: false },
+  { name: "XO Logistics", eligible: false, signed: false, activated: false, using: false },
+  { name: "Airyze", eligible: false, signed: false, activated: false, using: false },
+  { name: "Stockmatic", eligible: true, signed: false, activated: false, using: false },
+  { name: "Imogne + Willie", eligible: false, signed: false, activated: true, using: false },
+  { name: "Pro-Built Logistics", eligible: false, signed: false, activated: false, using: false },
+  { name: "MP Fulfillment, LLC (Priority Fulfillment)", eligible: true, signed: true, activated: true, using: true },
+  { name: "Handled Commerce (aka E-comm Filfillment)", eligible: false, signed: false, activated: false, using: false },
+  { name: "Saddlepoint 3PL", eligible: false, signed: true, activated: true, using: true },
+  { name: "Group Transport Inc.", eligible: false, signed: false, activated: false, using: false },
+  { name: "Velociraptor 3PL", eligible: false, signed: false, activated: true, using: false },
+  { name: "Malark Logistics", eligible: false, signed: false, activated: false, using: false },
+  { name: "Pronto Delivery", eligible: false, signed: false, activated: false, using: false },
+  { name: "GTH America - Non Deliverr", eligible: false, signed: false, activated: true, using: false },
+  { name: "Epic Charter Schools", eligible: false, signed: false, activated: false, using: false },
+  { name: "Logistic Angels", eligible: true, signed: false, activated: false, using: false },
+  { name: "Mantoria", eligible: false, signed: false, activated: false, using: false },
+  { name: "American Warehouse, Inc.", eligible: false, signed: true, activated: true, using: false },
+  { name: "Hydrofarm", eligible: false, signed: false, activated: false, using: false },
+  { name: "Golden Bridge", eligible: false, signed: false, activated: false, using: false },
+  { name: "Velocity International Group", eligible: false, signed: false, activated: false, using: false },
+  { name: "JKD", eligible: false, signed: false, activated: true, using: false },
+  { name: "Harris Tea Company (Harris Freeman 1981, LLC)", eligible: false, signed: false, activated: false, using: false },
+  { name: "Shiptroy", eligible: false, signed: false, activated: false, using: false },
+  { name: "Lynch Logistics", eligible: false, signed: false, activated: false, using: false },
+  { name: "YM Trading", eligible: false, signed: false, activated: false, using: false },
+  { name: "Art Creativity / Efficiency Experts", eligible: false, signed: false, activated: false, using: false },
+  { name: "Hyverhub", eligible: false, signed: false, activated: false, using: false },
+  { name: "Komyo Logistics", eligible: false, signed: false, activated: false, using: false },
+  { name: "United Warehouse", eligible: false, signed: false, activated: false, using: false },
+  { name: "7 days Express Online", eligible: false, signed: false, activated: false, using: false },
+  { name: "Booksify Trading INC", eligible: false, signed: false, activated: false, using: false },
+  { name: "Howlett", eligible: false, signed: false, activated: true, using: false },
+  { name: "Sun Pac Manufacturing Co (FavaFill Inc)", eligible: false, signed: false, activated: false, using: false },
+  { name: "Waff Logistics", eligible: false, signed: false, activated: false, using: false },
+  { name: "Amir Transport", eligible: false, signed: false, activated: false, using: false },
+  { name: "Fanatics", eligible: true, signed: true, activated: true, using: false },
+  { name: "Dile Solutions", eligible: false, signed: false, activated: false, using: false },
+  { name: "Logistics Plus", eligible: true, signed: true, activated: true, using: true },
+  { name: "OC3PL", eligible: true, signed: false, activated: false, using: false },
+  { name: "WP Fulfillment", eligible: false, signed: false, activated: false, using: false },
+  { name: "Accurate Freight Systems", eligible: false, signed: false, activated: false, using: false },
+  { name: "World Pantry", eligible: true, signed: true, activated: false, using: false },
+  { name: "Team 1 Supply", eligible: false, signed: true, activated: false, using: false },
+  { name: "Pepsi", eligible: true, signed: false, activated: false, using: false },
+  { name: "List Logistics", eligible: true, signed: false, activated: false, using: false },
+  { name: "Pronto", eligible: false, signed: false, activated: false, using: false },
+  { name: "Genesis Engineering", eligible: false, signed: false, activated: false, using: false },
+  { name: "Warehouse anywhere", eligible: false, signed: false, activated: false, using: false },
+  { name: "Supplied Longevity", eligible: false, signed: true, activated: false, using: false },
+  { name: "Fulfillment Australia", eligible: true, signed: true, activated: false, using: false },
+  { name: "FloFillment", eligible: false, signed: false, activated: false, using: false },
+  { name: "shipstow", eligible: false, signed: false, activated: false, using: false }
 ];
 
 function aiRecord(name) {
@@ -789,21 +773,22 @@ function aiAnswer(item, key) {
   if (stored === "Yes" || stored === "No") return { value: stored, manual: true, found: !!aiRecord(item.name) };
   const record = aiRecord(item.name);
   if (!record) return { value: "", manual: false, found: false };
-  return { value: record[key === "aiEligible" ? "eligible" : "enabled"] ? "Yes" : "No", manual: false, found: true };
+  const flag = key === "aiEligible" ? record.eligible : record.signed;
+  return { value: flag ? "Yes" : "No", manual: false, found: true };
 }
 
 function aiAnswers(item) {
-  return { eligible: aiAnswer(item, "aiEligible"), enabled: aiAnswer(item, "aiEnabled") };
+  return { eligible: aiAnswer(item, "aiEligible"), signed: aiAnswer(item, "aiSigned"), record: aiRecord(item.name) };
 }
 
 function aiHint(item) {
   const answers = aiAnswers(item);
-  if (!answers.eligible.found && !answers.eligible.manual && !answers.enabled.manual) return "This name was not found on the AI Adoption document. Yes or No can be set here.";
+  if (!answers.eligible.found && !answers.eligible.manual && !answers.signed.manual) return "This name was not found on the IO Customer list. Yes or No can be set here.";
   const manual = [];
   if (answers.eligible.manual) manual.push("AI Eligible was marked on this form.");
-  if (answers.enabled.manual) manual.push("AI Enabled was marked on this form.");
-  if (manual.length) return `${manual.join(" ")} Choose Select to follow the document again.`;
-  return `AI Eligible is ${answers.eligible.value} and AI Enabled is ${answers.enabled.value} on the AI Adoption document.`;
+  if (answers.signed.manual) manual.push("AI Signed / Convinced was marked on this form.");
+  if (manual.length) return `${manual.join(" ")} Choose Select to follow the IO Customer list again.`;
+  return `AI Eligible is ${answers.eligible.value} and AI Signed / Convinced is ${answers.signed.value} on the IO Customer list.`;
 }
 
 function aiSelectHtml(item, key, label) {
