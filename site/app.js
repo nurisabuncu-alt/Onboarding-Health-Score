@@ -167,7 +167,7 @@ const MARKETPLACES = [
   { group: "ERP", name: "Acumatica", aliases: ["acumatica"] },
   { group: "ERP", name: "Apparel Magic", aliases: ["apparel magic","apparelmagic"], note: "Not on the public site" },
   { group: "ERP", name: "Cin7 Core", aliases: ["cin7 core","cin7core","cin7","cin 7"] },
-  { group: "ERP", name: "Microsoft Dynamics 365", aliases: ["microsoft dynamics 365","microsoftdynamics365","dynamics 365","microsoft dynamics","dynamics"] },
+  { group: "ERP", name: "Microsoft Dynamics 365", aliases: ["microsoft dynamics 365","microsoftdynamics365","ms dynamics 365","ms dynamics","dynamics 365","microsoft dynamics","dynamics"] },
   { group: "ERP", name: "NetSuite", aliases: ["netsuite"] },
   { group: "ERP", name: "NewEgg", aliases: ["newegg"] },
   { group: "ERP", name: "Odoo", aliases: ["odoo"] },
@@ -325,7 +325,12 @@ function shortLeftovers(text) {
     return [cleaned.replace(/^[.\s]+|[.\s]+$/g, "")];
   }
   const tokens = stripSupported(cleaned).split(/[^A-Za-z0-9.&+]+/).map((token) => token.trim()).filter((token) => token.length >= 2);
-  const kept = tokens.filter((token) => !LEFTOVER_STOP.has(token.toLowerCase()));
+  const kept = tokens.filter((token) => {
+    const lower = token.toLowerCase();
+    if (LEFTOVER_STOP.has(lower)) return false;
+    const abbreviated = token.length <= 3 && [MARKETPLACES, CARRIERS].some((catalog) => catalog.some((item) => item.name.toLowerCase().startsWith(lower)));
+    return !abbreviated;
+  });
   return kept.length > 3 ? [] : kept;
 }
 
@@ -788,7 +793,7 @@ function customer(seed) {
       ? { ...seed.phases[phase.id], updatedAt: seed.phases[phase.id].updatedAt || new Date().toISOString() }
       : { assessor: seed.engineer || "", updatedAt: "", answers: {} };
   });
-  return {
+  const item = {
     id: crypto.randomUUID(),
     sample: !!seed.sample,
     name: seed.name || "",
@@ -799,6 +804,8 @@ function customer(seed) {
     },
     phases
   };
+  normalizeStickyForm(item);
+  return item;
 }
 
 function answers(scores, raw = {}) {
@@ -1879,6 +1886,7 @@ document.body.addEventListener("submit", (event) => {
   state.customers.unshift(item);
   save();
   location.hash = `#/customer/${encodeURIComponent(item.id)}?phase=early`;
+  render(true);
 });
 
 function saveStickyField(item, key, value) {
