@@ -433,7 +433,7 @@ const STICKY_FIELDS = [
 ];
 
 function emptyStickyForm() {
-  const form = { updatedAt: "", aiAdoption: "" };
+  const form = { updatedAt: "", aiEligible: "", aiEnabled: "" };
   STICKY_FIELDS.forEach((field) => { form[field.key] = ""; });
   return form;
 }
@@ -441,6 +441,7 @@ function emptyStickyForm() {
 function normalizeStickyForm(item) {
   const current = item.stickyForm && typeof item.stickyForm === "object" ? item.stickyForm : {};
   item.stickyForm = { ...emptyStickyForm(), ...current };
+  delete item.stickyForm.aiAdoption;
 }
 
 function stickyStarted(item) {
@@ -548,12 +549,20 @@ function stickySuggestions(item) {
       done: "The sticky form has its answers, including the sign-off lines."
     });
   }
-  if (onAiList(item)) {
+  const ai = aiAnswers(item);
+  if (ai.eligible.value === "Yes" && ai.enabled.value !== "Yes") {
     steps.push({
       timing: "At the sticky meeting",
       owner: "Implementation engineer",
-      action: "This customer is on the AI Adoption list. The sticky conversation can include a short invitation to that path.",
-      done: "AI adoption has been mentioned, or the team has agreed to leave it for later."
+      action: "This customer is AI eligible and not enabled yet. The sticky conversation can include a short invitation to turn it on.",
+      done: "AI enablement has been mentioned, or the team has agreed to leave it for later."
+    });
+  } else if (ai.enabled.value === "Yes") {
+    steps.push({
+      timing: "At the sticky meeting",
+      owner: "Implementation engineer",
+      action: "AI is already enabled for this customer. The sticky conversation can include a short check that it is in use.",
+      done: "The team has noted whether AI is in use."
     });
   }
   return steps;
@@ -592,8 +601,8 @@ function stickyFormHtml(item) {
     <div class="sticky-fields">${approvals.map((field) => stickyFieldHtml(item, field)).join("")}</div>
     <h2 class="span-3">Select all applicable</h2>
     <div class="sticky-fields">${checks.map((field) => stickyFieldHtml(item, field)).join("")}</div>
-    <label class="span-3">On the AI Adoption list<select class="text" data-sticky="aiAdoption"><option value="" ${item.stickyForm.aiAdoption === "" ? "selected" : ""}>Select</option><option value="Yes" ${item.stickyForm.aiAdoption === "Yes" ? "selected" : ""}>Yes</option><option value="No" ${item.stickyForm.aiAdoption === "No" ? "selected" : ""}>No</option></select></label>
-    <p class="hint span-3">${esc(aiAdoptionHint(item))} Leave this blank to follow the <a href="https://docs.google.com/spreadsheets/d/1mjr3-XtbDVAfKAgSdBOuElTSdZkzh6UoVilhYi8rkU0/edit" target="_blank" rel="noopener">AI Adoption document</a>. Yes or No overrides that list.</p>
+    <div class="sticky-fields">${aiSelectHtml(item, "aiEligible", "AI Eligible?")}${aiSelectHtml(item, "aiEnabled", "AI Enabled?")}</div>
+    <p class="hint span-3">${esc(aiHint(item))} <a href="https://docs.google.com/spreadsheets/d/1mjr3-XtbDVAfKAgSdBOuElTSdZkzh6UoVilhYi8rkU0/edit" target="_blank" rel="noopener">AI Adoption document</a></p>
   </section>`;
 }
 
@@ -638,44 +647,168 @@ function namesMatch(customer, listed) {
   const shorter = left.length <= right.length ? left : right;
   const longer = left.length <= right.length ? right : left;
   if (shorter.length >= 8 && longer.includes(shorter)) return true;
-  return longer.startsWith(`${shorter} `);
+  if (longer.startsWith(`${shorter} `)) return true;
+  let shared = 0;
+  while (shared < left.length && shared < right.length && left[shared] === right[shared]) shared += 1;
+  const restLeft = left.slice(shared);
+  const restRight = right.slice(shared);
+  return shared >= 12 && restLeft.length <= 4 && restRight.length <= 4 && /^[a-z]*$/.test(restLeft + restRight);
 }
 
-const AI_ADOPTION = [
-  "Priority Fulfillment", "Future Fulfilment - Pilot", "Future Fulfillment", "Howlett - Logiwa IO Migration", "Howlett",
-  "RXO", "American Warehouse - New Deal", "American Warehouse, Inc.", "KSP Fulfillment - New Deal", "KSP Fulfillment",
-  "GTH America - IO Migration", "GTH America - Non Deliverr", "OneLive - IO Migration", "OneLive", "Custom Back Office",
-  "Custom Back Office Solutions", "Velocity International Group", "Simpson Labs - IO Migration - CSM", "Simpson Labs",
-  "On Air Direct - IO Migration", "On Air Direct", "JKD", "Evolution Logistics", "Golden Bridge", "Harris Freeman",
-  "Amir Transports", "A to Z Drying", "Group Transport - IO Migration", "Favafill", "Product Fulfillment Solutions",
-  "Product Fulllment Solutions, Inc.", "OC3PL", "Admirari", "Valencia Fulfillment", "Inland Star", "Simple Global",
-  "Logistics Plus", "Dile Logistics", "California Olive Ranch", "Paleovalley", "Revelry", "GoodBuy Gear", "Good Buy Gear",
-  "Genesis Engineering", "Genesis Engineering Services", "Airyze", "7 Days Express", "YM Trading", "Komyo Logistics",
-  "Accurate Freight Systems", "WP Fulfillment", "Fanatics Topps", "Fanatics", "United Logistics", "World Pantry",
-  "Team 1 Supply", "Pepsi", "List Logistics", "Pronto", "Warehouseanywhere", "Fulfillment Australia", "Flofillment",
-  "Supplied Longevity", "National Commercial Warehouse (NCW)", "Flexport", "Deliverr Inc / Flexport", "Radial", "Sincro",
-  "Go Sincro Limited", "Drive Fulfillment", "Badger", "Badger Fulfillment Group Inc", "Veyer LLC", "Locad",
-  "Aviator Nation", "eShipper+", "JLab", "Pegasus Media & Logistics", "Calibrate Network", "Palletized",
-  "Annies Publishing (aka DRG Management, Inc.)", "eCom Logistics", "Shipflow", "Left Brain Logistics", "ShipTo Partners",
-  "3PL PROS, LLC.", "Magna-Tiles", "MV Sport", "Stockmatic", "Imogne + Willie", "MP Fulfillment, LLC (Priority Fulfillment)",
-  "Saddlepoint 3PL", "Velociraptor 3PL", "Logistic Angels"
+const AI_CUSTOMERS = [
+{ name: "Priority Fulfillment", eligible: true, enabled: true },
+  { name: "Future Fulfilment - Pilot", eligible: true, enabled: true },
+  { name: "Howlett - Logiwa IO Migration", eligible: false, enabled: true },
+  { name: "RXO", eligible: false, enabled: false },
+  { name: "American Warehouse - New Deal", eligible: false, enabled: true },
+  { name: "KSP Fulfillment - New Deal", eligible: true, enabled: true },
+  { name: "GTH America - IO Migration", eligible: false, enabled: true },
+  { name: "OneLive - IO Migration", eligible: true, enabled: true },
+  { name: "Custom Back Office", eligible: true, enabled: true },
+  { name: "Velocity International Group", eligible: false, enabled: true },
+  { name: "Simpson Labs - IO Migration - CSM", eligible: true, enabled: true },
+  { name: "On Air Direct - IO Migration", eligible: true, enabled: true },
+  { name: "JKD", eligible: false, enabled: true },
+  { name: "Evolution Logistics", eligible: false, enabled: false },
+  { name: "Golden Bridge", eligible: false, enabled: false },
+  { name: "Harris Freeman", eligible: false, enabled: false },
+  { name: "Amir Transports", eligible: false, enabled: false },
+  { name: "A to Z Drying", eligible: false, enabled: false },
+  { name: "Group Transport - IO Migration", eligible: false, enabled: false },
+  { name: "Favafill", eligible: false, enabled: false },
+  { name: "Product Fulfillment Solutions", eligible: true, enabled: true },
+  { name: "OC3PL", eligible: true, enabled: false },
+  { name: "Admirari", eligible: false, enabled: false },
+  { name: "Valencia Fulfillment", eligible: false, enabled: false },
+  { name: "Inland Star", eligible: false, enabled: false },
+  { name: "Simple Global", eligible: true, enabled: true },
+  { name: "Logistics Plus", eligible: true, enabled: true },
+  { name: "Dile Logistics", eligible: false, enabled: false },
+  { name: "California Olive Ranch", eligible: false, enabled: false },
+  { name: "Paleovalley", eligible: false, enabled: false },
+  { name: "Revelry", eligible: false, enabled: false },
+  { name: "GoodBuy Gear", eligible: true, enabled: false },
+  { name: "Genesis Engineering", eligible: false, enabled: false },
+  { name: "Airyze", eligible: false, enabled: false },
+  { name: "7 Days Express", eligible: false, enabled: false },
+  { name: "YM Trading", eligible: false, enabled: false },
+  { name: "Komyo Logistics", eligible: false, enabled: false },
+  { name: "Accurate Freight Systems", eligible: false, enabled: false },
+  { name: "WP Fulfillment", eligible: false, enabled: false },
+  { name: "Fanatics Topps", eligible: true, enabled: true },
+  { name: "United Logistics", eligible: false, enabled: false },
+  { name: "Genesis Engineering Services", eligible: false, enabled: false },
+  { name: "World Pantry", eligible: true, enabled: false },
+  { name: "Team 1 Supply", eligible: false, enabled: true },
+  { name: "Pepsi", eligible: true, enabled: false },
+  { name: "List Logistics", eligible: true, enabled: false },
+  { name: "Pronto", eligible: false, enabled: false },
+  { name: "Warehouseanywhere", eligible: false, enabled: false },
+  { name: "Fulfillment Australia", eligible: true, enabled: false },
+  { name: "Flofillment", eligible: false, enabled: false },
+  { name: "Supplied Longevity", eligible: false, enabled: true },
+  { name: "National Commercial Warehouse (NCW)", eligible: false, enabled: false },
+  { name: "Flexport", eligible: true, enabled: true },
+  { name: "Radial", eligible: true, enabled: true },
+  { name: "Sincro", eligible: true, enabled: true },
+  { name: "Drive Fulfillment", eligible: true, enabled: true },
+  { name: "Badger", eligible: true, enabled: true },
+  { name: "Veyer LLC", eligible: true, enabled: false },
+  { name: "Locad", eligible: true, enabled: false },
+  { name: "Aviator Nation", eligible: false, enabled: false },
+  { name: "eShipper+", eligible: true, enabled: false },
+  { name: "Go Sincro Limited", eligible: true, enabled: true },
+  { name: "Lateral Fulfillment (aka Wisdom Fulfillment LLC)", eligible: false, enabled: false },
+  { name: "Knight Swift Warehouse and Fulfillment", eligible: false, enabled: false },
+  { name: "Bacarella Transportation Services (aka BTX Fulfillment/Liftwing)", eligible: false, enabled: false },
+  { name: "JLab", eligible: false, enabled: false },
+  { name: "Good Buy Gear", eligible: true, enabled: false },
+  { name: "Pegasus Media & Logistics", eligible: false, enabled: true },
+  { name: "PTS Fulfillment Services Inc", eligible: false, enabled: false },
+  { name: "Konami Gaming", eligible: false, enabled: false },
+  { name: "Calibrate Network", eligible: true, enabled: true },
+  { name: "Palletized", eligible: true, enabled: false },
+  { name: "Annies Publishing (aka DRG Management, Inc.)", eligible: true, enabled: false },
+  { name: "ORC industries", eligible: false, enabled: false },
+  { name: "RugPadUSA", eligible: false, enabled: false },
+  { name: "Product Fulllment Solutions, Inc.", eligible: true, enabled: true },
+  { name: "eCom Logistics", eligible: true, enabled: false },
+  { name: "Beautylish, Inc.", eligible: false, enabled: false },
+  { name: "National Commercial Warehouse (aka Revitalize Industries)", eligible: false, enabled: false },
+  { name: "Shipflow", eligible: true, enabled: false },
+  { name: "The Armstrong Company", eligible: false, enabled: false },
+  { name: "Left Brain Logistics", eligible: true, enabled: false },
+  { name: "ShipTo Partners", eligible: true, enabled: false },
+  { name: "3PL PROS, LLC.", eligible: true, enabled: false },
+  { name: "Magna-Tiles", eligible: false, enabled: true },
+  { name: "Advance Warehouse and Logistics", eligible: false, enabled: false },
+  { name: "MV Sport", eligible: true, enabled: false },
+  { name: "Broad Reach Logistics", eligible: false, enabled: false },
+  { name: "Recurrent Energy Power Services", eligible: false, enabled: false },
+  { name: "XO Logistics", eligible: false, enabled: false },
+  { name: "Stockmatic", eligible: true, enabled: false },
+  { name: "Imogne + Willie", eligible: false, enabled: true },
+  { name: "Pro-Built Logistics", eligible: false, enabled: false },
+  { name: "Handled Commerce (aka E-comm Filfillment)", eligible: false, enabled: false },
+  { name: "Saddlepoint 3PL", eligible: false, enabled: true },
+  { name: "Group Transport Inc.", eligible: false, enabled: false },
+  { name: "Velociraptor 3PL", eligible: false, enabled: true },
+  { name: "Malark Logistics", eligible: false, enabled: false },
+  { name: "GTH America - Non Deliverr", eligible: false, enabled: true },
+  { name: "Epic Charter Schools", eligible: false, enabled: false },
+  { name: "Logistic Angels", eligible: true, enabled: false },
+  { name: "Mantoria", eligible: false, enabled: false },
+  { name: "American Warehouse, Inc.", eligible: false, enabled: true },
+  { name: "Hydrofarm", eligible: false, enabled: false },
+  { name: "Shiptroy", eligible: false, enabled: false },
+  { name: "Lynch Logistics", eligible: false, enabled: false },
+  { name: "Art Creativity / Efficiency Experts", eligible: false, enabled: false },
+  { name: "Hyverhub", eligible: false, enabled: false },
+  { name: "United Warehouse", eligible: false, enabled: false },
+  { name: "Booksify Trading INC", eligible: false, enabled: false },
+  { name: "Waff Logistics", eligible: false, enabled: false },
+  { name: "Dile Solutions", eligible: false, enabled: false },
+  { name: "Warehouse anywhere", eligible: false, enabled: false },
+  { name: "shipstow", eligible: false, enabled: false }
 ];
 
-function listedForAi(name) {
-  return AI_ADOPTION.some((listed) => namesMatch(name, listed));
+function aiRecord(name) {
+  const hits = AI_CUSTOMERS.filter((row) => namesMatch(name, row.name));
+  if (!hits.length) return null;
+  const folded = foldName(name);
+  hits.sort((a, b) => {
+    const exact = (row) => (foldName(row.name) === folded ? 0 : 1);
+    if (exact(a) !== exact(b)) return exact(a) - exact(b);
+    return Math.abs(foldName(a.name).length - folded.length) - Math.abs(foldName(b.name).length - folded.length);
+  });
+  return hits[0];
 }
 
-function onAiList(item) {
-  if (item.stickyForm.aiAdoption === "No") return false;
-  if (item.stickyForm.aiAdoption === "Yes") return true;
-  return listedForAi(item.name);
+function aiAnswer(item, key) {
+  const stored = item.stickyForm[key];
+  if (stored === "Yes" || stored === "No") return { value: stored, manual: true, found: !!aiRecord(item.name) };
+  const record = aiRecord(item.name);
+  if (!record) return { value: "", manual: false, found: false };
+  return { value: record[key === "aiEligible" ? "eligible" : "enabled"] ? "Yes" : "No", manual: false, found: true };
 }
 
-function aiAdoptionHint(item) {
-  if (item.stickyForm.aiAdoption === "Yes") return "Marked Yes on this form.";
-  if (item.stickyForm.aiAdoption === "No") return "Marked No, so a document match is set aside.";
-  if (listedForAi(item.name)) return "This name is on the AI Adoption document.";
-  return "This name was not found on the AI Adoption document.";
+function aiAnswers(item) {
+  return { eligible: aiAnswer(item, "aiEligible"), enabled: aiAnswer(item, "aiEnabled") };
+}
+
+function aiHint(item) {
+  const answers = aiAnswers(item);
+  if (!answers.eligible.found && !answers.eligible.manual && !answers.enabled.manual) return "This name was not found on the AI Adoption document. Yes or No can be set here.";
+  const manual = [];
+  if (answers.eligible.manual) manual.push("AI Eligible was marked on this form.");
+  if (answers.enabled.manual) manual.push("AI Enabled was marked on this form.");
+  if (manual.length) return `${manual.join(" ")} Choose Select to follow the document again.`;
+  return `AI Eligible is ${answers.eligible.value} and AI Enabled is ${answers.enabled.value} on the AI Adoption document.`;
+}
+
+function aiSelectHtml(item, key, label) {
+  const shown = aiAnswer(item, key).value;
+  return `<label>${esc(label)}<select class="text" data-sticky="${key}"><option value="" ${shown === "" ? "selected" : ""}>Select</option><option value="Yes" ${shown === "Yes" ? "selected" : ""}>Yes</option><option value="No" ${shown === "No" ? "selected" : ""}>No</option></select></label>`;
 }
 
 function normalizeYesNo(value) {
