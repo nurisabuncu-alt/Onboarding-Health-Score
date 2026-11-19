@@ -1081,7 +1081,6 @@ function dashboardView() {
     ${shell("Score a customer at kickoff, during activation, and again before the account is treated as sticky.")}
     <main class="wrap">
       ${hasSamples ? `<div class="notice"><span>Three sample customers are loaded so the dashboard has something to read. Remove them before entering live accounts.</span><button class="btn" data-action="clear-samples">Remove samples</button></div>` : ""}
-      ${ui.hubspotNotice ? `<div class="notice"><span>${esc(ui.hubspotNotice)}</span></div>` : ""}
       <section class="stats">
         <article class="stat"><b>${state.customers.length}</b><span>Customers</span></article>
         <article class="stat high"><b>${counts.high}</b><span>High risk</span></article>
@@ -1177,7 +1176,7 @@ function customerView(current) {
         <div>
           <a class="back" href="#/">All customers</a>
           <input class="name-input" data-field="name" value="${esc(item.name)}" aria-label="Customer name" />
-          <p class="meta" id="updated-line">${item.sample ? "Sample record · " : ""}Last change ${esc(when(updated))}${item.hubspotCompanyName ? ` · HubSpot ${esc(item.hubspotCompanyName)}` : ""}</p>
+          <p class="meta" id="updated-line">${item.sample ? "Sample record · " : ""}Last change ${esc(when(updated))}</p>
         </div>
         <button class="btn quiet" data-action="delete" data-id="${esc(item.id)}">Delete customer</button>
       </div>
@@ -1740,7 +1739,7 @@ function railHtml(item, phase, result) {
 }
 
 function shell(lede) {
-  return `<header class="app-header"><div class="header-inner header-row"><div><p class="eyebrow">Professional Services</p><h1>Onboarding Health Score</h1><p class="lede">${esc(lede)}</p></div><div class="header-actions"><a class="btn" href="#/">Dashboard</a><a class="btn primary" href="#/new">New customer</a><button class="btn" data-action="export">Export</button><label class="btn file-btn">Import JSON<input id="import-file" type="file" accept="application/json" /></label><label class="btn file-btn">Import HubSpot answers<input id="hubspot-file" type="file" accept="application/json" /></label></div></div></header>`;
+  return `<header class="app-header"><div class="header-inner header-row"><div><p class="eyebrow">Professional Services</p><h1>Onboarding Health Score</h1><p class="lede">${esc(lede)}</p></div><div class="header-actions"><a class="btn" href="#/">Dashboard</a><a class="btn primary" href="#/new">New customer</a><button class="btn" data-action="export">Export</button><label class="btn file-btn">Import JSON<input id="import-file" type="file" accept="application/json" /></label></div></div></header>`;
 }
 
 function touch(item, phaseId) {
@@ -2034,22 +2033,13 @@ document.body.addEventListener("change", (event) => {
     if (file) readKickoffFile(file);
     return;
   }
-  if (event.target.id !== "import-file" && event.target.id !== "hubspot-file") return;
-  const hubspotFile = event.target.id === "hubspot-file";
+  if (event.target.id !== "import-file") return;
   const file = event.target.files[0];
-  event.target.value = "";
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
     try {
       const data = JSON.parse(reader.result);
-      if (data && data.kind === "hubspot-answers") {
-        ui.hubspotNotice = applyHubspotAnswers(data);
-        location.hash = "#/";
-        render();
-        return;
-      }
-      if (hubspotFile) throw new Error("hubspot");
       const customers = Array.isArray(data) ? data : data.customers;
       if (Array.isArray(customers)) state = { customers };
       else if (data && data.name && data.phases) state.customers.unshift(data);
@@ -2058,70 +2048,11 @@ document.body.addEventListener("change", (event) => {
       location.hash = "#/";
       render();
     } catch (err) {
-      alert(hubspotFile ? "That file is not a HubSpot answers file." : "That file is not an onboarding health export.");
+      alert("That file is not an onboarding health export.");
     }
   };
   reader.readAsText(file);
 });
-
-function applyHubspotAnswers(data) {
-  const rows = Array.isArray(data.customers) ? data.customers : [];
-  const updated = [];
-  const missingHere = [];
-  const missingHubspot = [];
-  rows.forEach((row) => {
-    const name = row.name || "A customer";
-    if (row.matched === false) {
-      missingHubspot.push(name);
-      return;
-    }
-    const item = (row.id && state.customers.find((customer) => customer.id === row.id))
-      || state.customers.find((customer) => namesMatch(customer.name, row.name) || foldName(customer.name) === foldName(row.name));
-    if (!item) {
-      missingHere.push(name);
-      return;
-    }
-    if (row.companyId) item.hubspotCompanyId = String(row.companyId);
-    if (row.companyName) item.hubspotCompanyName = row.companyName;
-    item.hubspotUpdatedAt = row.updatedAt || data.updatedAt || new Date().toISOString();
-    let wrote = false;
-    Object.entries(row.answers || {}).forEach(([phaseId, metrics]) => {
-      if (!phaseById(phaseId) || !metrics) return;
-      Object.entries(metrics).forEach(([metricId, incoming]) => {
-        if (setHubspotAnswer(item, phaseId, metricId, incoming)) wrote = true;
-      });
-    });
-    if (wrote) updated.push(item.name);
-  });
-  save();
-  const parts = [];
-  if (updated.length) parts.push(`HubSpot answers are in for ${updated.join(", ")}.`);
-  else parts.push("No HubSpot answers were applied.");
-  if (missingHubspot.length) parts.push(`${missingHubspot.join(", ")} ${missingHubspot.length === 1 ? "was" : "were"} not found in HubSpot.`);
-  if (missingHere.length) parts.push(`${missingHere.join(", ")} ${missingHere.length === 1 ? "is" : "are"} not in this browser.`);
-  return parts.join(" ");
-}
-
-function setHubspotAnswer(item, phaseId, metricId, incoming) {
-  const metric = phaseById(phaseId).metrics.find((entry) => entry.id === metricId);
-  if (!metric || !incoming) return false;
-  const answer = answerFor(item, phaseId, metricId);
-  if (incoming.na) {
-    answer.na = true;
-    answer.score = null;
-    answer.raw = "";
-    answer.note = incoming.note || "No value in HubSpot.";
-  } else if (incoming.raw != null && String(incoming.raw) !== "") {
-    answer.raw = String(incoming.raw);
-    answer.na = false;
-    answer.score = suggest(metric, answer.raw).score;
-    answer.note = incoming.note || "";
-  } else return false;
-  answer.hubspot = true;
-  answer.manual = false;
-  item.phases[phaseId].updatedAt = new Date().toISOString();
-  return true;
-}
 
 function slug(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "customer"; }
 function download(data, filename) {
