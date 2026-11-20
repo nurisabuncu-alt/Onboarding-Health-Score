@@ -1047,7 +1047,81 @@ function route() {
   return { name: "dashboard" };
 }
 
+const AUTH = {
+  clientId: "201499874435-9dbdm35evu2gkn6flcji9bvroqsgvote.apps.googleusercontent.com",
+  domain: "logiwa.com",
+  key: "onboarding-health-score-auth"
+};
+let authMessage = "";
+let gateTries = 0;
+
+function authSession() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AUTH.key) || "null");
+    if (saved && saved.email && saved.exp > Date.now()) return saved;
+  } catch (err) { /* fall through to sign-in */ }
+  localStorage.removeItem(AUTH.key);
+  return null;
+}
+
+function decodeCredential(token) {
+  const part = String(token).split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(part.padEnd(part.length + ((4 - (part.length % 4)) % 4), "="));
+  const json = decodeURIComponent(binary.split("").map((char) => `%${`00${char.charCodeAt(0).toString(16)}`.slice(-2)}`).join(""));
+  return JSON.parse(json);
+}
+
+function handleCredential(response) {
+  let claims;
+  try {
+    claims = decodeCredential(response.credential);
+  } catch (err) {
+    authMessage = "Sign-in could not be read. Try again.";
+    render(true);
+    return;
+  }
+  const email = String(claims.email || "").toLowerCase();
+  if (claims.aud !== AUTH.clientId || !claims.email_verified || !email.endsWith(`@${AUTH.domain}`)) {
+    authMessage = `Use your ${AUTH.domain} Google account to sign in.`;
+    render(true);
+    return;
+  }
+  localStorage.setItem(AUTH.key, JSON.stringify({ email, name: claims.name || email, exp: Number(claims.exp) * 1000 }));
+  authMessage = "";
+  render(true);
+}
+
+function gateView() {
+  return `<header class="app-header"><div class="header-inner header-row"><div><p class="eyebrow">Professional Services</p><h1>Onboarding Health Score</h1></div></div></header>
+    <main class="wrap"><section class="card gate-card">
+      <h2>Sign in</h2>
+      <p class="muted">Use your ${esc(AUTH.domain)} Google account to open the health scores.</p>
+      <div id="gate-button" class="gate-button"></div>
+      ${authMessage ? `<p class="hint">${esc(authMessage)}</p>` : ""}
+    </section></main>`;
+}
+
+function startGate() {
+  const mount = () => {
+    if (!window.google || !google.accounts || !google.accounts.id) {
+      gateTries += 1;
+      if (gateTries < 40) setTimeout(mount, 250);
+      return;
+    }
+    google.accounts.id.initialize({ client_id: AUTH.clientId, callback: handleCredential, hd: AUTH.domain, auto_select: false, ux_mode: "popup" });
+    const box = document.getElementById("gate-button");
+    if (box) google.accounts.id.renderButton(box, { theme: "outline", size: "large", text: "signin_with", shape: "pill", width: 280 });
+  };
+  mount();
+}
+
 function render(resetScroll) {
+  if (!authSession()) {
+    document.getElementById("app").innerHTML = gateView();
+    startGate();
+    if (resetScroll) window.scrollTo(0, 0);
+    return;
+  }
   const current = route();
   document.getElementById("app").innerHTML = current.name === "customer"
     ? customerView(current)
@@ -1831,7 +1905,7 @@ function railHtml(item, phase, result) {
 }
 
 function shell(lede) {
-  return `<header class="app-header"><div class="header-inner header-row"><div><p class="eyebrow">Professional Services</p><h1>Onboarding Health Score</h1><p class="lede">${esc(lede)}</p></div><div class="header-actions"><a class="btn" href="#/">Dashboard</a><a class="btn primary" href="#/new">New customer</a><button class="btn" data-action="export">Export</button><label class="btn file-btn">Import JSON<input id="import-file" type="file" accept="application/json" /></label></div></div></header>`;
+  return `<header class="app-header"><div class="header-inner header-row"><div><p class="eyebrow">Professional Services</p><h1>Onboarding Health Score</h1><p class="lede">${esc(lede)}</p></div><div class="header-actions"><a class="btn" href="#/">Dashboard</a><a class="btn primary" href="#/new">New customer</a><button class="btn" data-action="export">Export</button><label class="btn file-btn">Import JSON<input id="import-file" type="file" accept="application/json" /></label><button class="btn" data-action="sign-out">Sign out</button></div></div></header>`;
 }
 
 function touch(item, phaseId) {
@@ -1924,6 +1998,7 @@ document.body.addEventListener("click", (event) => {
   const action = target.dataset.action;
   if (action === "open") location.hash = `#/customer/${encodeURIComponent(target.dataset.id)}`;
   if (action === "filter") { ui.risk = target.dataset.risk; render(); }
+  if (action === "sign-out") { localStorage.removeItem(AUTH.key); authMessage = ""; location.hash = "#/"; render(true); }
   if (action === "hubspot-check") checkHubspot(target.dataset.metric);
   if (action === "hubspot-use") useHubspotCompany(target.dataset.metric, target.dataset.index);
   if (action === "clear-samples") { state.customers = state.customers.filter((item) => !item.sample); save(); render(); }
