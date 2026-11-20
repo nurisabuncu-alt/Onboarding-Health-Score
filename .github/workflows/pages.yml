@@ -5,7 +5,7 @@ on:
     branches: [main]
   workflow_dispatch:
   workflow_run:
-    workflows: ["HubSpot sync"]
+    workflows: ["HubSpot sync", "TAM sync"]
     types: [completed]
 
 permissions:

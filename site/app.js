@@ -1663,6 +1663,71 @@ function stickyFormTab(item, active) {
 }
 
 const HUBSPOT_CHECK_METRICS = new Set(["sev1", "sev2", "nps"]);
+const TAM_CHECK_METRICS = new Set(["integration"]);
+
+function tamAccounts() {
+  const snapshot = window.TAM_SNAPSHOT;
+  return snapshot && Array.isArray(snapshot.accounts) ? snapshot.accounts : [];
+}
+
+function tamCheckHtml(metricId) {
+  const snapshot = window.TAM_SNAPSHOT || {};
+  const synced = snapshot.updatedAt ? `TAM health score synced ${when(snapshot.updatedAt)}.` : "TAM health score has not been synced yet.";
+  return `<div class="hubspot-check">
+    <button type="button" class="btn" data-action="tam-check" data-metric="${metricId}">Check TAM score</button>
+    <span class="hint">${esc(synced)}</span>
+    <div class="hubspot-pick" data-pick="${metricId}"></div>
+  </div>`;
+}
+
+function applyTamAccount(item, phaseId, metricId, account) {
+  const metric = phaseById(phaseId).metrics.find((entry) => entry.id === metricId);
+  const answer = answerFor(item, phaseId, metricId);
+  answer.na = false;
+  answer.raw = String(account.score);
+  answer.score = suggest(metric, answer.raw).score;
+  if (!answer.note) answer.note = `From the TAM health score for ${account.name}${account.status ? ` (${account.status})` : ""}.`;
+  answer.tam = true;
+  answer.manual = false;
+  item.phases[phaseId].updatedAt = new Date().toISOString();
+  save();
+  render(false);
+}
+
+function checkTam(metricId) {
+  const found = currentCustomer();
+  if (!found || !found.phase) return;
+  const { item, phase } = found;
+  const accounts = tamAccounts();
+  if (!accounts.length) {
+    setHubspotPick(metricId, `<p class="hint">The TAM score is not synced yet. Run the TAM sync in GitHub, then try again.</p>`);
+    return;
+  }
+  const key = compactName(item.name);
+  const exact = accounts.filter((account) => compactName(account.name) === key);
+  if (exact.length) {
+    applyTamAccount(item, phase.id, metricId, exact[0]);
+    return;
+  }
+  const similar = accounts
+    .filter((account) => hubspotNameSimilar(item.name, account.name) || namesMatch(item.name, account.name))
+    .sort((a, b) => Math.abs(compactName(a.name).length - key.length) - Math.abs(compactName(b.name).length - key.length))
+    .slice(0, 2);
+  if (!similar.length) {
+    setHubspotPick(metricId, `<p class="hint">No TAM account is close to ${esc(item.name)}.</p>`);
+    return;
+  }
+  ui.tamPick = { customerId: item.id, phaseId: phase.id, metricId, list: similar };
+  setHubspotPick(metricId, `<p class="hint">No exact name in the TAM list. Did you mean one of these?</p>` + similar.map((account, index) => `<button type="button" class="btn" data-action="tam-use" data-index="${index}" data-metric="${metricId}">Use ${esc(account.name)}</button>`).join(" "));
+}
+
+function useTam(metricId, index) {
+  const found = currentCustomer();
+  const pick = ui.tamPick;
+  if (!found || !pick || pick.customerId !== found.item.id || pick.metricId !== metricId) return;
+  const account = pick.list[Number(index)];
+  if (account) applyTamAccount(found.item, pick.phaseId, metricId, account);
+}
 
 function hubspotCompanies() {
   const snapshot = window.HUBSPOT_SNAPSHOT;
@@ -1786,6 +1851,7 @@ function questionsHtml(item, phase) {
       </div>
       <p class="hint" data-hint="${metric.id}">${esc(suggestion)}</p>
       ${HUBSPOT_CHECK_METRICS.has(metric.id) ? hubspotCheckHtml(metric.id) : ""}
+      ${TAM_CHECK_METRICS.has(metric.id) ? tamCheckHtml(metric.id) : ""}
     </article>`;
   }).join("");
 }
@@ -2015,6 +2081,8 @@ document.body.addEventListener("click", (event) => {
   if (action === "sign-out") { localStorage.removeItem(AUTH.key); authMessage = ""; location.hash = "#/"; render(true); }
   if (action === "hubspot-check") checkHubspot(target.dataset.metric);
   if (action === "hubspot-use") useHubspotCompany(target.dataset.metric, target.dataset.index);
+  if (action === "tam-check") checkTam(target.dataset.metric);
+  if (action === "tam-use") useTam(target.dataset.metric, target.dataset.index);
   if (action === "clear-samples") { state.customers = state.customers.filter((item) => !item.sample); save(); render(); }
   if (action === "delete") {
     const item = customerById(target.dataset.id);
