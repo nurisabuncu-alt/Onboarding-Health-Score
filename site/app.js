@@ -1672,9 +1672,9 @@ function tamAccounts() {
 
 function tamCheckHtml(metricId) {
   const snapshot = window.TAM_SNAPSHOT || {};
-  const synced = snapshot.updatedAt ? `TAM health score synced ${when(snapshot.updatedAt)}.` : "TAM health score has not been synced yet.";
+  const synced = snapshot.updatedAt ? `IHS health score synced ${when(snapshot.updatedAt)}.` : "IHS health score has not been synced yet.";
   return `<div class="hubspot-check">
-    <button type="button" class="btn" data-action="tam-check" data-metric="${metricId}">Check TAM score</button>
+    <button type="button" class="btn" data-action="tam-check" data-metric="${metricId}">Check IHS score</button>
     <span class="hint">${esc(synced)}</span>
     <div class="hubspot-pick" data-pick="${metricId}"></div>
   </div>`;
@@ -1686,7 +1686,7 @@ function applyTamAccount(item, phaseId, metricId, account) {
   answer.na = false;
   answer.raw = String(account.score);
   answer.score = suggest(metric, answer.raw).score;
-  if (!answer.note) answer.note = `From the TAM health score for ${account.name}${account.status ? ` (${account.status})` : ""}.`;
+  if (!answer.note) answer.note = `From the IHS health score for ${account.name}${account.status ? ` (${account.status})` : ""}.`;
   answer.tam = true;
   answer.manual = false;
   item.phases[phaseId].updatedAt = new Date().toISOString();
@@ -1700,7 +1700,7 @@ function checkTam(metricId) {
   const { item, phase } = found;
   const accounts = tamAccounts();
   if (!accounts.length) {
-    setHubspotPick(metricId, `<p class="hint">The TAM score is not synced yet. Run the TAM sync in GitHub, then try again.</p>`);
+    setHubspotPick(metricId, `<p class="hint">The IHS score is not synced yet. Run the IHS sync in GitHub, then try again.</p>`);
     return;
   }
   const key = compactName(item.name);
@@ -1714,11 +1714,11 @@ function checkTam(metricId) {
     .sort((a, b) => Math.abs(compactName(a.name).length - key.length) - Math.abs(compactName(b.name).length - key.length))
     .slice(0, 2);
   if (!similar.length) {
-    setHubspotPick(metricId, `<p class="hint">No TAM account is close to ${esc(item.name)}.</p>`);
+    setHubspotPick(metricId, `<p class="hint">No IHS account is close to ${esc(item.name)}.</p>`);
     return;
   }
   ui.tamPick = { customerId: item.id, phaseId: phase.id, metricId, list: similar };
-  setHubspotPick(metricId, `<p class="hint">No exact name in the TAM list. Did you mean one of these?</p>` + similar.map((account, index) => `<button type="button" class="btn" data-action="tam-use" data-index="${index}" data-metric="${metricId}">Use ${esc(account.name)}</button>`).join(" "));
+  setHubspotPick(metricId, `<p class="hint">No exact name in the IHS list. Did you mean one of these?</p>` + similar.map((account, index) => `<button type="button" class="btn" data-action="tam-use" data-index="${index}" data-metric="${metricId}">Use ${esc(account.name)}</button>`).join(" "));
 }
 
 function useTam(metricId, index) {

@@ -1,4 +1,4 @@
-name: TAM sync
+name: IHS sync
 
 on:
   schedule:
