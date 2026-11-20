@@ -306,6 +306,7 @@ textarea { min-height: 84px; resize: vertical; }
   .name-input { font-size: 24px; }
 }
 
+.ihs-link a { color: var(--accent-deep); }
 .hubspot-check { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
 .hubspot-pick { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .hubspot-pick .hint { margin: 0; }

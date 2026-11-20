@@ -1664,6 +1664,7 @@ function stickyFormTab(item, active) {
 
 const HUBSPOT_CHECK_METRICS = new Set(["sev1", "sev2", "nps"]);
 const TAM_CHECK_METRICS = new Set(["integration"]);
+const IHS_ACCOUNTS_URL = "https://onurarpaci-logiwa.github.io/tam-technical-health-score/index.html#accounts";
 
 function tamAccounts() {
   const snapshot = window.TAM_SNAPSHOT;
@@ -1680,13 +1681,27 @@ function tamCheckHtml(metricId) {
   </div>`;
 }
 
+function ihsAccountName(item, answer) {
+  const key = compactName(item.name);
+  const exact = tamAccounts().find((account) => compactName(account.name) === key);
+  if (exact) return exact.name;
+  return answer && answer.ihsName ? answer.ihsName : "";
+}
+
+function ihsAccountLinkHtml(name) {
+  if (!name) return "";
+  return `<p class="hint ihs-link"><a href="${IHS_ACCOUNTS_URL}" target="_blank" rel="noopener">Open ${esc(name)} on the IHS score</a></p>`;
+}
+
 function applyTamAccount(item, phaseId, metricId, account) {
   const metric = phaseById(phaseId).metrics.find((entry) => entry.id === metricId);
   const answer = answerFor(item, phaseId, metricId);
   answer.na = false;
   answer.raw = String(account.score);
   answer.score = suggest(metric, answer.raw).score;
-  if (!answer.note) answer.note = `From the IHS health score for ${account.name}${account.status ? ` (${account.status})` : ""}.`;
+  answer.ihsName = account.name;
+  const note = `From the IHS health score for ${account.name}${account.status ? ` (${account.status})` : ""}. ${IHS_ACCOUNTS_URL}`;
+  if (!answer.note || /^From the (IHS health score|TAM )/.test(answer.note)) answer.note = note;
   answer.tam = true;
   answer.manual = false;
   item.phases[phaseId].updatedAt = new Date().toISOString();
@@ -1850,6 +1865,7 @@ function questionsHtml(item, phase) {
         <label class="block">Note<textarea data-note="${metric.id}">${esc(answer.note)}</textarea></label>
       </div>
       <p class="hint" data-hint="${metric.id}">${esc(suggestion)}</p>
+      ${metric.id === "integration" ? ihsAccountLinkHtml(ihsAccountName(item, answer)) : ""}
       ${HUBSPOT_CHECK_METRICS.has(metric.id) ? hubspotCheckHtml(metric.id) : ""}
       ${TAM_CHECK_METRICS.has(metric.id) ? tamCheckHtml(metric.id) : ""}
     </article>`;
