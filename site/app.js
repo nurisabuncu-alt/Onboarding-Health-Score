@@ -1748,11 +1748,11 @@ function checkHubspot(metricId) {
     return;
   }
   const similar = companies
-    .filter((company) => hubspotHasData(company, metricId) && (hubspotNameSimilar(item.name, company.name) || namesMatch(item.name, company.name)))
+    .filter((company) => hubspotNameSimilar(item.name, company.name) || namesMatch(item.name, company.name))
     .sort((a, b) => Math.abs(compactName(a.name).length - key.length) - Math.abs(compactName(b.name).length - key.length))
     .slice(0, 2);
   if (!similar.length) {
-    setHubspotPick(metricId, `<p class="hint">No HubSpot company named ${esc(item.name)}, and no similar name with this data.</p>`);
+    setHubspotPick(metricId, `<p class="hint">No HubSpot company is close to ${esc(item.name)}.</p>`);
     return;
   }
   ui.hubspotPick = { customerId: item.id, phaseId: phase.id, metricId, list: similar };
