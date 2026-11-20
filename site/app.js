@@ -1588,6 +1588,97 @@ function stickyFormTab(item, active) {
   return `<a class="tab" data-phase="sticky-form" href="#/customer/${encodeURIComponent(item.id)}?phase=sticky-form" aria-selected="${active}"><b>Sticky form</b><span class="meta">${esc(stickyFormStatus(item))}</span></a>`;
 }
 
+const HUBSPOT_CHECK_METRICS = new Set(["sev1", "sev2", "nps"]);
+
+function hubspotCompanies() {
+  const snapshot = window.HUBSPOT_SNAPSHOT;
+  return snapshot && Array.isArray(snapshot.companies) ? snapshot.companies : [];
+}
+
+function hubspotCheckHtml(metricId) {
+  const snapshot = window.HUBSPOT_SNAPSHOT || {};
+  const synced = snapshot.updatedAt ? `HubSpot synced ${when(snapshot.updatedAt)}.` : "HubSpot has not been synced yet.";
+  return `<div class="hubspot-check">
+    <button type="button" class="btn" data-action="hubspot-check" data-metric="${metricId}">Check Hubspot</button>
+    <span class="hint">${esc(synced)}</span>
+    <div class="hubspot-pick" data-pick="${metricId}"></div>
+  </div>`;
+}
+
+function hubspotValue(company, metricId) {
+  if (metricId === "sev1") return company.sev1;
+  if (metricId === "sev2") return company.sev2;
+  return company.nps;
+}
+
+function hubspotHasData(company, metricId) {
+  if (metricId === "nps") return company.nps != null;
+  return hubspotValue(company, metricId) > 0;
+}
+
+function applyHubspotCompany(item, phaseId, metricId, company) {
+  const metric = phaseById(phaseId).metrics.find((entry) => entry.id === metricId);
+  const answer = answerFor(item, phaseId, metricId);
+  const value = hubspotValue(company, metricId);
+  if (metricId === "nps" && value == null) {
+    answer.na = true;
+    answer.score = null;
+    answer.raw = "";
+    if (!answer.note) answer.note = `No NPS survey on HubSpot for ${company.name}.`;
+  } else {
+    answer.na = false;
+    answer.raw = String(value);
+    answer.score = suggest(metric, answer.raw).score;
+    if (!answer.note) answer.note = `From HubSpot company ${company.name}.`;
+  }
+  answer.hubspot = true;
+  answer.manual = false;
+  item.phases[phaseId].updatedAt = new Date().toISOString();
+  save();
+  render(false);
+}
+
+function setHubspotPick(metricId, html) {
+  const box = document.querySelector(`[data-pick="${metricId}"]`);
+  if (box) box.innerHTML = html;
+}
+
+function checkHubspot(metricId) {
+  const found = currentCustomer();
+  if (!found) return;
+  const { item, phase } = found;
+  const companies = hubspotCompanies();
+  if (!companies.length) {
+    setHubspotPick(metricId, `<p class="hint">HubSpot data is not synced yet. Run the HubSpot sync in GitHub, then try again.</p>`);
+    return;
+  }
+  const key = foldName(item.name);
+  const exact = companies.filter((company) => foldName(company.name) === key);
+  if (exact.length) {
+    const best = exact.find((company) => hubspotHasData(company, metricId)) || exact[0];
+    applyHubspotCompany(item, phase.id, metricId, best);
+    return;
+  }
+  const similar = companies
+    .filter((company) => hubspotHasData(company, metricId) && namesMatch(item.name, company.name))
+    .sort((a, b) => Math.abs(foldName(a.name).length - key.length) - Math.abs(foldName(b.name).length - key.length))
+    .slice(0, 2);
+  if (!similar.length) {
+    setHubspotPick(metricId, `<p class="hint">No HubSpot company named ${esc(item.name)}, and no similar name with this data.</p>`);
+    return;
+  }
+  ui.hubspotPick = { customerId: item.id, phaseId: phase.id, metricId, list: similar };
+  setHubspotPick(metricId, `<p class="hint">No exact name in HubSpot. Did you mean one of these?</p>` + similar.map((company, index) => `<button type="button" class="btn" data-action="hubspot-use" data-index="${index}" data-metric="${metricId}">Use ${esc(company.name)}</button>`).join(" "));
+}
+
+function useHubspotCompany(metricId, index) {
+  const found = currentCustomer();
+  const pick = ui.hubspotPick;
+  if (!found || !pick || pick.customerId !== found.item.id || pick.metricId !== metricId) return;
+  const company = pick.list[Number(index)];
+  if (company) applyHubspotCompany(found.item, pick.phaseId, metricId, company);
+}
+
 function questionsHtml(item, phase) {
   let category = "";
   return phase.metrics.map((metric) => {
@@ -1606,6 +1697,7 @@ function questionsHtml(item, phase) {
         <label class="block">Note<textarea data-note="${metric.id}">${esc(answer.note)}</textarea></label>
       </div>
       <p class="hint" data-hint="${metric.id}">${esc(suggestion)}</p>
+      ${HUBSPOT_CHECK_METRICS.has(metric.id) ? hubspotCheckHtml(metric.id) : ""}
     </article>`;
   }).join("");
 }
@@ -1832,6 +1924,8 @@ document.body.addEventListener("click", (event) => {
   const action = target.dataset.action;
   if (action === "open") location.hash = `#/customer/${encodeURIComponent(target.dataset.id)}`;
   if (action === "filter") { ui.risk = target.dataset.risk; render(); }
+  if (action === "hubspot-check") checkHubspot(target.dataset.metric);
+  if (action === "hubspot-use") useHubspotCompany(target.dataset.metric, target.dataset.index);
   if (action === "clear-samples") { state.customers = state.customers.filter((item) => !item.sample); save(); render(); }
   if (action === "delete") {
     const item = customerById(target.dataset.id);

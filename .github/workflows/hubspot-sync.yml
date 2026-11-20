@@ -1,0 +1,36 @@
+name: HubSpot sync
+
+on:
+  schedule:
+    - cron: "15 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hubspot-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Read HubSpot companies, open Sev1/Sev2 tickets, and NPS
+        run: node scripts/hubspot-sync.mjs
+        env:
+          HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+      - name: Publish the snapshot
+        run: |
+          git add site/hubspot-snapshot.js
+          if git diff --cached --quiet; then
+            echo "No HubSpot changes."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Refresh HubSpot snapshot."
+          git push
