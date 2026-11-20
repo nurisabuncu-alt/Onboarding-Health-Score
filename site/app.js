@@ -1717,6 +1717,20 @@ function setHubspotPick(metricId, html) {
   if (box) box.innerHTML = html;
 }
 
+function compactName(value) {
+  return foldName(value).replace(/ /g, "");
+}
+
+function hubspotNameSimilar(a, b) {
+  const left = compactName(a);
+  const right = compactName(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const shorter = left.length <= right.length ? left : right;
+  const longer = shorter === left ? right : left;
+  return shorter.length >= 8 && longer.includes(shorter);
+}
+
 function checkHubspot(metricId) {
   const found = currentCustomer();
   if (!found) return;
@@ -1726,16 +1740,16 @@ function checkHubspot(metricId) {
     setHubspotPick(metricId, `<p class="hint">HubSpot data is not synced yet. Run the HubSpot sync in GitHub, then try again.</p>`);
     return;
   }
-  const key = foldName(item.name);
-  const exact = companies.filter((company) => foldName(company.name) === key);
+  const key = compactName(item.name);
+  const exact = companies.filter((company) => compactName(company.name) === key);
   if (exact.length) {
     const best = exact.find((company) => hubspotHasData(company, metricId)) || exact[0];
     applyHubspotCompany(item, phase.id, metricId, best);
     return;
   }
   const similar = companies
-    .filter((company) => hubspotHasData(company, metricId) && namesMatch(item.name, company.name))
-    .sort((a, b) => Math.abs(foldName(a.name).length - key.length) - Math.abs(foldName(b.name).length - key.length))
+    .filter((company) => hubspotHasData(company, metricId) && (hubspotNameSimilar(item.name, company.name) || namesMatch(item.name, company.name)))
+    .sort((a, b) => Math.abs(compactName(a.name).length - key.length) - Math.abs(compactName(b.name).length - key.length))
     .slice(0, 2);
   if (!similar.length) {
     setHubspotPick(metricId, `<p class="hint">No HubSpot company named ${esc(item.name)}, and no similar name with this data.</p>`);
