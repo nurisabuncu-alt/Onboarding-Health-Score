@@ -64,8 +64,8 @@ const PHASES = [
   },
   {
     id: "activation",
-    name: "Activation",
-    scoreName: "Activation Health Score",
+    name: "Pre-Activation",
+    scoreName: "Pre-Activation Health Score",
     purpose: "Judge execution health through go-live.",
     metrics: [
       { id: "stakeholder", category: "Communication & Engagement", name: "Stakeholder engagement", weight: 0.05, source: "Manual", method: "Attendance and active participation of the warehouse manager, IT lead, and executive sponsor in meetings.", anchors: [[1, "Key stakeholders frequently absent or disengaged."], [3, "Inconsistent attendance and participation."], [5, "All key stakeholders consistently attend and actively contribute."]] },
@@ -80,8 +80,8 @@ const PHASES = [
   },
   {
     id: "sticky",
-    name: "Pre-Sticky",
-    scoreName: "Pre-Sticky Health Score",
+    name: "Post-Activation",
+    scoreName: "Post-Activation Health Score",
     purpose: "Judge whether usage and support are holding after activation.",
     metrics: [
       { id: "ownership", category: "Communication & Engagement", name: "Project ownership", weight: 0.1, source: "Manual", ...ownership },
@@ -96,6 +96,8 @@ const PHASES = [
 ];
 
 const ui = { q: "", risk: "all" };
+
+const STICKY_STATUSES = ["Awaiting for Assessment", "Success", "Fail"];
 
 function load() {
   let loaded;
@@ -412,6 +414,7 @@ function normalizeCustomer(item) {
   kickoff.custom = split.custom;
   kickoff.unsupported = split.unsupported;
   delete kickoff.developing;
+  if (!STICKY_STATUSES.includes(item.stickyStatus)) item.stickyStatus = STICKY_STATUSES[0];
   normalizeStickyForm(item);
 }
 
@@ -465,7 +468,7 @@ function stickySuggestions(item) {
       level: "hold",
       timing: "Before the sticky meeting",
       owner: "Implementation engineer",
-      action: "Activation and Pre-Sticky both need a full score before this account is judged ready for the sticky meeting.",
+      action: "Pre-Activation and Post-Activation both need a full score before this account is judged ready for the sticky meeting.",
       done: "Both scores are in, so the average can be read."
     });
   } else if (scores.average < 3) {
@@ -473,7 +476,7 @@ function stickySuggestions(item) {
       level: "hold",
       timing: "Suggested first",
       owner: "Implementation engineer",
-      action: `Activation is ${fmt(scores.activation.score)} and Pre-Sticky is ${fmt(scores.pre.score)}. Together they average ${fmt(scores.average)}, under 3. It would help to look through those scores again. This account does not look ready to bring to the sticky meeting yet.`,
+      action: `Pre-Activation is ${fmt(scores.activation.score)} and Post-Activation is ${fmt(scores.pre.score)}. Together they average ${fmt(scores.average)}, under 3. It would help to look through those scores again. This account does not look ready to bring to the sticky meeting yet.`,
       done: "The two scores have been reviewed, and the average is no longer under 3, or the team has agreed to wait."
     });
   }
@@ -546,7 +549,7 @@ function stickySuggestions(item) {
     steps.push({
       timing: "Next step",
       owner: "Implementation engineer",
-      action: "The sticky form is the next step after Pre-Sticky. Filling it in shows whether a sign-off, scope, training, payment, or usage item is still open.",
+      action: "The sticky form is the next step after Post-Activation. Filling it in shows whether a sign-off, scope, training, payment, or usage item is still open.",
       done: "The sticky form has its answers, including the sign-off lines."
     });
   }
@@ -563,10 +566,10 @@ function stickySuggestions(item) {
 }
 
 function stickyLead(item, steps) {
-  if (steps.some((step) => step.level === "hold")) return "This is the next step after Pre-Sticky, and the account needs another look before the sticky meeting.";
-  if (!stickyStarted(item)) return "The sticky form is the next step after Pre-Sticky.";
-  if (!steps.length) return "Pre-Sticky is behind this account, and the sticky form looks settled. It can be brought to the sticky meeting.";
-  return "The sticky form is the next step after Pre-Sticky. A few items are still open.";
+  if (steps.some((step) => step.level === "hold")) return "This is the next step after Post-Activation, and the account needs another look before the sticky meeting.";
+  if (!stickyStarted(item)) return "The sticky form is the next step after Post-Activation.";
+  if (!steps.length) return "Post-Activation is behind this account, and the sticky form looks settled. It can be brought to the sticky meeting.";
+  return "The sticky form is the next step after Post-Activation. A few items are still open.";
 }
 
 function stickyFormStatus(item) {
@@ -603,7 +606,7 @@ function stickyFormHtml(item) {
 function stickyPlanHtml(item) {
   const steps = stickySuggestions(item);
   const list = steps.map((step) => `<li><p class="meta">${esc(step.timing)} · ${esc(step.owner)}</p><p>${esc(step.action)}</p><p class="hint">Feels settled when ${esc(step.done.charAt(0).toLowerCase() + step.done.slice(1))}</p></li>`).join("");
-  return `<h2>Suggested plan</h2><p class="plan-lead">${esc(stickyLead(item, steps))}</p>${list ? `<ol class="plan-steps">${list}</ol>` : ""}<p class="hint">Suggestions for the sticky meeting, the next step after Pre-Sticky. The engineer can take them in any order.</p>`;
+  return `<h2>Suggested plan</h2><p class="plan-lead">${esc(stickyLead(item, steps))}</p>${list ? `<ol class="plan-steps">${list}</ol>` : ""}<p class="hint">Suggestions for the sticky meeting, the next step after Post-Activation. The engineer can take them in any order.</p>`;
 }
 
 function stickyRailHtml(item) {
@@ -615,10 +618,10 @@ function stickyRailHtml(item) {
     <p class="eyebrow">Sticky meeting</p>
     <div class="big-score">${headline}</div>
     <span class="pill ${warn ? "high" : scores.average != null ? "low" : ""}">${status}</span>
-    <p class="meta">Average of Activation and Pre-Sticky.</p>
+    <p class="meta">Average of Pre-Activation and Post-Activation.</p>
     <h2>Scores</h2>
-    <div class="driver"><span>Activation</span><b>${scores.activation.complete ? fmt(scores.activation.score) : "—"}</b></div>
-    <div class="driver"><span>Pre-Sticky</span><b>${scores.pre.complete ? fmt(scores.pre.score) : "—"}</b></div>
+    <div class="driver"><span>Pre-Activation</span><b>${scores.activation.complete ? fmt(scores.activation.score) : "—"}</b></div>
+    <div class="driver"><span>Post-Activation</span><b>${scores.pre.complete ? fmt(scores.pre.score) : "—"}</b></div>
     <p class="band-copy">An average under 3 means the account is not ready for the sticky meeting yet. Missing sign-off on the form becomes a suggestion to have it signed.</p>`;
 }
 
@@ -920,7 +923,8 @@ function customer(seed) {
       date: "", goLive: "", warehouses: "", users: "", clients: "", apiUsers: "", volume: "", marketplaces: [], carriers: [], custom: [], unsupported: [], integrations: "", notes: "",
       ...(seed.kickoff || {})
     },
-    phases
+    phases,
+    stickyStatus: STICKY_STATUSES.includes(seed.stickyStatus) ? seed.stickyStatus : STICKY_STATUSES[0]
   };
   normalizeStickyForm(item);
   return item;
@@ -1152,7 +1156,7 @@ function dashboardView() {
   const weak = weakMetrics();
   const hasSamples = state.customers.some((item) => item.sample);
   return `
-    ${shell("Score a customer at kickoff, during activation, and again before the account is treated as sticky.")}
+    ${shell("Score a customer at kickoff, in Pre-Activation, and again in Post-Activation before the account is treated as sticky.")}
     <main class="wrap">
       ${hasSamples ? `<div class="notice"><span>Three sample customers are loaded so the dashboard has something to read. Remove them before entering live accounts.</span><button class="btn" data-action="clear-samples">Remove samples</button></div>` : ""}
       <section class="stats">
@@ -1188,7 +1192,13 @@ function customerRow(item, low) {
     const cls = result.complete ? result.band : "";
     return `<span class="phase-score"><em>${esc(phase.name)}</em><b class="score-num">${result.complete ? fmt(result.score) : "—"}</b><i class="pill ${cls}">${result.complete ? BANDS[result.band].label : `${result.answered.length}/${result.applicable.length || phase.metrics.length}`}</i></span>`;
   }).join("");
-  return `<button class="customer-row" data-action="open" data-id="${esc(item.id)}"><span><strong>${esc(item.name)}</strong><span class="meta">${esc(item.engineer || "No engineer")} · ${low ? esc(low.phase.name) : "No completed phase"}</span></span>${phases}</button>`;
+  const status = stickyStatusOf(item);
+  const options = STICKY_STATUSES.map((option) => `<option value="${esc(option)}" ${option === status ? "selected" : ""}>${esc(option)}</option>`).join("");
+  return `<div class="customer-row" role="button" tabindex="0" data-action="open" data-id="${esc(item.id)}"><span><strong>${esc(item.name)}</strong><span class="meta">${esc(item.engineer || "No engineer")} · ${low ? esc(low.phase.name) : "No completed phase"}</span></span>${phases}<label class="phase-score sticky-status"><em>Sticky Status</em><select class="text status-select" data-sticky-status-id="${esc(item.id)}" data-status="${esc(status)}" aria-label="Sticky Status for ${esc(item.name)}">${options}</select></label></div>`;
+}
+
+function stickyStatusOf(item) {
+  return STICKY_STATUSES.includes(item.stickyStatus) ? item.stickyStatus : STICKY_STATUSES[0];
 }
 
 function weakMetrics() {
@@ -1244,7 +1254,7 @@ function customerView(current) {
   const result = phase ? evaluate(item, phase.id) : null;
   const updated = stickyForm ? item.stickyForm.updatedAt : item.phases[phase.id].updatedAt;
   return `
-    ${shell(stickyForm ? "The next step after Pre-Sticky. Decide whether this account is ready for the sticky meeting." : phase.purpose)}
+    ${shell(stickyForm ? "The next step after Post-Activation. Decide whether this account is ready for the sticky meeting." : phase.purpose)}
     <main class="wrap">
       <div class="page-head">
         <div>
@@ -1889,8 +1899,8 @@ function planLead(phase, result) {
     },
     activation: {
       high: "Go-live may feel easier if the team spends a little time on the notes below first.",
-      medium: "Activation can continue. The notes below are light follow-ups.",
-      low: "Activation is in a good place."
+      medium: "Pre-Activation can continue. The notes below are light follow-ups.",
+      low: "Pre-Activation is in a good place."
     },
     sticky: {
       high: "A handoff conversation can wait until the notes below feel a little more settled.",
@@ -1980,7 +1990,7 @@ function planHtml(item, phase, result) {
   const paymentNote = payment && !drivers.some((entry) => entry.metric.id === "payment")
     ? `<p class="hint">${esc(payment.answer.score === 1 ? "Payments may also need a closer follow-up. The invoice detail can stay in Maxio." : "There is also a small payment follow-up. The invoice detail can stay in Maxio.")}</p>`
     : "";
-  const next = phase.id === "sticky" && result.complete ? `<p class="hint">The next step after Pre-Sticky is the Sticky form.</p>` : "";
+  const next = phase.id === "sticky" && result.complete ? `<p class="hint">The next step after Post-Activation is the Sticky form.</p>` : "";
   return `<h2>Suggested plan</h2><p class="plan-lead">${esc(planLead(phase, result))}</p>${steps ? `<ol class="plan-steps">${steps}</ol>` : ""}${quiet}${paymentNote}${next}<p class="hint">Suggestions from this phase’s scores. The engineer can take them in any order.</p>`;
 }
 
@@ -2089,6 +2099,7 @@ document.body.addEventListener("click", (event) => {
     return;
   }
   if (!event.target.closest("[data-combo]")) closeMenus();
+  if (event.target.closest(".sticky-status")) return;
   const target = event.target.closest("[data-action]");
   if (!target) return;
   const action = target.dataset.action;
@@ -2143,6 +2154,12 @@ document.body.addEventListener("click", (event) => {
 });
 
 document.body.addEventListener("keydown", (event) => {
+  const row = event.target.closest && event.target.closest(".customer-row");
+  if (row && event.target === row && (event.key === "Enter" || event.key === " ")) {
+    event.preventDefault();
+    location.hash = `#/customer/${encodeURIComponent(row.dataset.id)}`;
+    return;
+  }
   const chipSearch = event.target.closest("[data-unsupported], [data-custom]");
   if (chipSearch && event.target.matches && event.target.matches("[data-unsupported-search], [data-custom-search]")) {
     const write = chipSearch.hasAttribute("data-custom") ? writeCustom : writeUnsupported;
@@ -2282,6 +2299,14 @@ function saveStickyField(item, key, value) {
 }
 
 document.body.addEventListener("change", (event) => {
+  if (event.target.matches && event.target.matches("[data-sticky-status-id]")) {
+    const customer = customerById(event.target.dataset.stickyStatusId);
+    if (!customer || !STICKY_STATUSES.includes(event.target.value)) return;
+    customer.stickyStatus = event.target.value;
+    event.target.dataset.status = customer.stickyStatus;
+    save();
+    return;
+  }
   if (event.target.matches && event.target.matches("[data-sticky]")) {
     const found = currentCustomer();
     if (!found) return;

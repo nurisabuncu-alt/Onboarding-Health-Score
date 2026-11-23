@@ -1,6 +1,6 @@
 # Onboarding Health Score
 
-Professional Services app for scoring a customer at Early Churn, Activation, and Pre-Sticky.
+Professional Services app for scoring a customer at Early Churn, Pre-Activation, and Post-Activation. The dashboard also tracks a Sticky Status for each customer.
 
 Published the same way as the WMS migration report:
 
