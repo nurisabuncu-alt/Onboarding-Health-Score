@@ -75,7 +75,7 @@ const PHASES = [
       { id: "training", category: "Training participation", name: "Training delays", weight: 0.2, source: "Manual", helper: "training", helperLabel: "No-shows or reschedules", method: "How many training sessions or meetings had a no-show or were rescheduled?", anchors: [[1, "This happened more than 3 times."], [3, "This happened up to 3 times."], [5, "Everything was on time, with no no-show issues."]] },
       { id: "uat", category: "Quality and testing", name: "UAT readiness", weight: 0.2, source: "Manual", helper: "uat", helperLabel: "Test cases verified, %", method: "Is the customer actively testing the system, and how far has testing progressed?", anchors: [[1, "Any test case is verified."], [3, "Over 60% of test cases are verified."], [5, "Over 90% of test cases are verified."]] },
       { id: "adaption", category: "Governance and adaption", name: "Adaption", weight: 0.1, source: "Manual", method: "Learning curve of the project team.", anchors: [[1, "No capacity."], [3, "Moderate."], [5, "The project team is tech savvy and picks things up quickly."]] },
-      { id: "ontime", category: "Target achievement", name: "On-time activation", weight: 0.1, source: "HubSpot tickets", helper: "weeks", helperLabel: "Weeks the go-live moved", method: "Did the customer activate as initially planned, or has go-live moved?", anchors: [[1, "Go-live moved more than 8 weeks."], [3, "Go-live moved more than 4 weeks."], [5, "Go-live moved by up to 2 weeks."]] }
+      { id: "ontime", category: "Target achievement", name: "Project Progress", weight: 0.1, source: "HubSpot tickets", helper: "weeks", helperLabel: "Weeks delayed", method: "Is the project going live as initially planned, or has it been delayed?", anchors: [[1, "Delayed more than 8 weeks."], [3, "Delayed more than 4 weeks."], [5, "Delayed by up to 2 weeks."]] }
     ]
   },
   {
@@ -1921,7 +1921,7 @@ function evidencePhrase(metric, answer) {
   if (metric.id === "integration") return `The health score entered is ${n}.`;
   if (metric.id === "training") return n === 1 ? "One session was missed or moved." : `${n} sessions were missed or moved.`;
   if (metric.id === "uat") return `${n}% of test cases are verified.`;
-  if (metric.helper === "weeks") return `Go-live has moved ${n} weeks.`;
+  if (metric.helper === "weeks") return `The project is delayed by ${n} weeks.`;
   if (metric.id === "nps") return `The survey rating entered is ${n}.`;
   return "";
 }
@@ -1953,8 +1953,8 @@ function planStep(metric, answer, item) {
       ? ["Testing is still early. Inviting the customer to verify a few more cases would help.", "A few more cases are verified, and the customer knows what is left."]
       : ["Testing is underway. A little more verified coverage would round it out.", "The customer is comfortable with how much has been verified."],
     ontime: low
-      ? ["Go-live has moved quite a bit. A fresh date the customer is comfortable with would help.", "A new date is agreed, and it still feels realistic."]
-      : ["Go-live has shifted a little. Agreeing a date everyone can live with is a gentle next step.", "The date is agreed."]
+      ? ["The project is delayed quite a bit. A fresh date the customer is comfortable with would help.", "A new date is agreed, and it still feels realistic."]
+      : ["The project has slipped a little. Agreeing a date everyone can live with is a gentle next step.", "The date is agreed."]
     ,
     nps: low
       ? ["The survey rating is on the low side. It may help to ask what would make the experience easier, when the customer is ready.", "The customer has had a chance to say what would help."]
