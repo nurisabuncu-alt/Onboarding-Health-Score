@@ -747,7 +747,7 @@ const AI_CUSTOMERS = [
   { name: "WP Fulfillment", eligible: false, signed: false, activated: false, using: false },
   { name: "Accurate Freight Systems", eligible: false, signed: false, activated: false, using: false },
   { name: "World Pantry", eligible: true, signed: true, activated: false, using: false },
-  { name: "Team 1 Supply", eligible: false, signed: true, activated: false, using: false },
+  { name: "Team1 Supplier Services", eligible: false, signed: true, activated: true, using: false },
   { name: "Pepsi", eligible: true, signed: false, activated: false, using: false },
   { name: "List Logistics", eligible: true, signed: false, activated: false, using: false },
   { name: "Pronto", eligible: false, signed: false, activated: false, using: false },
