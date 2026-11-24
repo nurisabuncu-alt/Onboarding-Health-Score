@@ -1008,6 +1008,13 @@ function worst(customer) {
   return scored.sort((a, b) => a.result.score - b.result.score)[0];
 }
 
+// Which of the three buttons lights up for a score: 1–2 → first (1), 3 → second (3), 4–5 → third (5).
+function bandAnchor(score) {
+  if (score <= 2) return 1;
+  if (score === 3) return 3;
+  return 5;
+}
+
 function suggest(metric, raw) {
   if (raw === "" || raw == null) return { score: null, message: "" };
   const n = Number(raw);
@@ -1885,7 +1892,7 @@ function questionsHtml(item, phase) {
     return `${heading}<article class="q">
       <div class="q-top"><div><h3>${esc(metric.name)}</h3><p class="method">${esc(metric.method)}</p></div><span class="pill">${pct(metric.weight)} · ${esc(metric.source)}</span></div>
       ${baseline}
-      <div class="choices">${metric.anchors.map(([score, text]) => `<button type="button" class="choice s${score}" data-action="score" data-metric="${metric.id}" data-score="${score}" aria-pressed="${answer.score === score && !answer.na}" ${answer.na || metric.helper ? "disabled" : ""}><small>${score}</small>${esc(text)}</button>`).join("")}</div>
+      <div class="choices">${metric.anchors.map(([score, text]) => `<button type="button" class="choice s${score}" data-action="score" data-metric="${metric.id}" data-score="${score}" aria-pressed="${answer.score != null && !answer.na && bandAnchor(answer.score) === score}" ${answer.na || metric.helper ? "disabled" : ""}>${esc(text)}</button>`).join("")}</div>
       ${metric.helper ? "" : `<label class="score-entry">Score, 1–5<input class="text" type="number" min="1" max="5" step="1" inputmode="numeric" data-score-entry="${metric.id}" value="${answer.na || answer.score == null ? "" : esc(answer.score)}" ${answer.na ? "disabled" : ""} /></label>`}
       ${metric.optional ? `<label class="na"><input type="checkbox" data-action="na" data-metric="${metric.id}" ${answer.na ? "checked" : ""}/> Not applicable for this customer</label>` : ""}
       <div class="q-foot${metric.helper ? " with-helper" : ""}">
@@ -2287,7 +2294,7 @@ document.body.addEventListener("input", (event) => {
       hint.textContent = "Enter a whole number from 1 to 5.";
     }
     el.closest(".q").querySelectorAll(".choice").forEach((choice) => {
-      choice.setAttribute("aria-pressed", String(answer.score === Number(choice.dataset.score)));
+      choice.setAttribute("aria-pressed", String(answer.score != null && !answer.na && bandAnchor(answer.score) === Number(choice.dataset.score)));
     });
     touch(found.item, found.phase.id);
     paint(found.item, found.phase);
@@ -2301,7 +2308,7 @@ document.body.addEventListener("input", (event) => {
     answer.score = suggested.score;
     if (suggested.score != null) answer.na = false;
     el.closest(".q").querySelectorAll(".choice").forEach((choice) => {
-      choice.setAttribute("aria-pressed", String(choice.dataset.score === String(suggested.score)));
+      choice.setAttribute("aria-pressed", String(suggested.score != null && bandAnchor(suggested.score) === Number(choice.dataset.score)));
     });
     const naBox = el.closest(".q").querySelector("[data-action='na']");
     if (naBox && suggested.score != null) naBox.checked = false;
