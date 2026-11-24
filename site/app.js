@@ -1743,6 +1743,22 @@ function applyTamAccount(item, phaseId, metricId, account) {
   render(false);
 }
 
+// No IHS account for this customer: mark the metric Not Applicable so it drops out of the score.
+function applyTamNotApplicable(item, phaseId, metricId) {
+  const answer = answerFor(item, phaseId, metricId);
+  answer.na = true;
+  answer.score = null;
+  answer.raw = "";
+  answer.ihsName = "";
+  answer.tam = false;
+  answer.manual = false;
+  const note = `No IHS health score for ${item.name}, so Integration health is Not Applicable.`;
+  if (!answer.note || /^(No IHS health score|From the IHS health score|From the TAM )/.test(answer.note)) answer.note = note;
+  item.phases[phaseId].updatedAt = new Date().toISOString();
+  save();
+  render(false);
+}
+
 function checkTam(metricId) {
   const found = currentCustomer();
   if (!found || !found.phase) return;
@@ -1763,7 +1779,7 @@ function checkTam(metricId) {
     .sort((a, b) => Math.abs(compactName(a.name).length - key.length) - Math.abs(compactName(b.name).length - key.length))
     .slice(0, 2);
   if (!similar.length) {
-    setHubspotPick(metricId, `<p class="hint">No IHS account is close to ${esc(item.name)}.</p>`);
+    applyTamNotApplicable(item, phase.id, metricId);
     return;
   }
   ui.tamPick = { customerId: item.id, phaseId: phase.id, metricId, list: similar };
