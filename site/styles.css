@@ -205,6 +205,7 @@ textarea { min-height: 84px; resize: vertical; }
 .choice.s3[aria-pressed="true"] { background: var(--med-bg); color: var(--med); }
 .choice.s5[aria-pressed="true"] { background: var(--low-bg); color: var(--low); }
 .choice:disabled { opacity: 0.45; }
+.score-entry { display: grid; gap: 4px; margin-top: 10px; max-width: 200px; font-size: 14px; color: var(--muted); }
 .q-foot { display: grid; gap: 8px; margin-top: 10px; }
 .q-foot.with-helper { grid-template-columns: 180px 1fr; }
 .hint { min-height: 1.2em; font-size: 13px; color: var(--muted); margin-top: 6px; }

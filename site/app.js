@@ -390,6 +390,21 @@ function partitionIntegrations(marketplaces, carriers, unsupported, developing, 
   return { marketplaces: nextMarkets, carriers: nextCarriers, custom: nextCustom, unsupported: nextMissing };
 }
 
+// Questions scored from their numbers keep the score their rule gives, so saved scores follow the current bands.
+function refreshRuleScores(item) {
+  PHASES.forEach((phase) => {
+    const saved = item.phases && item.phases[phase.id];
+    if (!saved || !saved.answers) return;
+    phase.metrics.forEach((metric) => {
+      if (!metric.helper) return;
+      const answer = saved.answers[metric.id];
+      if (!answer || answer.na || answer.raw === "" || answer.raw == null) return;
+      const result = suggest(metric, answer.raw);
+      if (result.score != null) answer.score = result.score;
+    });
+  });
+}
+
 function normalizeCustomer(item) {
   item.kickoff = item.kickoff || {};
   const kickoff = item.kickoff;
@@ -415,6 +430,7 @@ function normalizeCustomer(item) {
   kickoff.unsupported = split.unsupported;
   delete kickoff.developing;
   if (!STICKY_STATUSES.includes(item.stickyStatus)) item.stickyStatus = STICKY_STATUSES[0];
+  refreshRuleScores(item);
   normalizeStickyForm(item);
 }
 
@@ -1013,10 +1029,11 @@ function suggest(metric, raw) {
     return { score: 1, message: "60% or below maps to 1." };
   }
   if (metric.helper === "weeks") {
-    if (n > 8) return { score: 1, message: "More than 8 weeks maps to 1." };
-    if (n > 4) return { score: 3, message: "More than 4 and up to 8 weeks maps to 3." };
-    if (n <= 2) return { score: 5, message: "Up to 2 weeks maps to 5." };
-    return { score: null, message: "More than 2 and up to 4 weeks is not defined in the template. Choose the closest band." };
+    if (n > 12) return { score: 1, message: "More than 12 weeks maps to 1." };
+    if (n > 8) return { score: 2, message: "9–12 weeks maps to 2." };
+    if (n > 4) return { score: 3, message: "5–8 weeks maps to 3." };
+    if (n > 2) return { score: 4, message: "3–4 weeks maps to 4." };
+    return { score: 5, message: "Up to 2 weeks maps to 5." };
   }
   if (metric.helper === "volume") {
     if (n < 50) return { score: 1, message: "Below 50% maps to 1." };
@@ -1868,7 +1885,8 @@ function questionsHtml(item, phase) {
     return `${heading}<article class="q">
       <div class="q-top"><div><h3>${esc(metric.name)}</h3><p class="method">${esc(metric.method)}</p></div><span class="pill">${pct(metric.weight)} · ${esc(metric.source)}</span></div>
       ${baseline}
-      <div class="choices">${metric.anchors.map(([score, text]) => `<button type="button" class="choice s${score}" data-action="score" data-metric="${metric.id}" data-score="${score}" aria-pressed="${answer.score === score && !answer.na}" ${answer.na ? "disabled" : ""}><small>${score}</small>${esc(text)}</button>`).join("")}</div>
+      <div class="choices">${metric.anchors.map(([score, text]) => `<button type="button" class="choice s${score}" data-action="score" data-metric="${metric.id}" data-score="${score}" aria-pressed="${answer.score === score && !answer.na}" ${answer.na || metric.helper ? "disabled" : ""}><small>${score}</small>${esc(text)}</button>`).join("")}</div>
+      ${metric.helper ? "" : `<label class="score-entry">Score, 1–5<input class="text" type="number" min="1" max="5" step="1" inputmode="numeric" data-score-entry="${metric.id}" value="${answer.na || answer.score == null ? "" : esc(answer.score)}" ${answer.na ? "disabled" : ""} /></label>`}
       ${metric.optional ? `<label class="na"><input type="checkbox" data-action="na" data-metric="${metric.id}" ${answer.na ? "checked" : ""}/> Not applicable for this customer</label>` : ""}
       <div class="q-foot${metric.helper ? " with-helper" : ""}">
         ${metric.helper ? `<label class="block">${esc(metric.helperLabel)}<input class="text" data-raw="${metric.id}" value="${esc(answer.raw)}" inputmode="decimal" /></label>` : ""}
@@ -2146,9 +2164,14 @@ document.body.addEventListener("click", (event) => {
     if (target.checked) answer.score = null;
     touch(found.item, found.phase.id);
     target.closest(".q").querySelectorAll(".choice").forEach((choice) => {
-      choice.disabled = target.checked;
+      choice.disabled = target.checked || !!found.phase.metrics.find((item) => item.id === target.dataset.metric).helper;
       choice.setAttribute("aria-pressed", "false");
     });
+    const entry = target.closest(".q").querySelector("[data-score-entry]");
+    if (entry) {
+      entry.disabled = target.checked;
+      entry.value = "";
+    }
     paint(found.item, found.phase);
   }
 });
@@ -2243,19 +2266,45 @@ document.body.addEventListener("input", (event) => {
     answerFor(found.item, found.phase.id, el.dataset.note).note = el.value;
     touch(found.item, found.phase.id);
   }
+  if (el.dataset.scoreEntry) {
+    const metric = found.phase.metrics.find((item) => item.id === el.dataset.scoreEntry);
+    const answer = answerFor(found.item, found.phase.id, metric.id);
+    const hint = el.closest(".q").querySelector("[data-hint]");
+    const text = String(el.value).trim();
+    const value = Number(text);
+    if (text === "") {
+      answer.score = null;
+      hint.textContent = "";
+    } else if (Number.isInteger(value) && value >= 1 && value <= 5) {
+      answer.score = value;
+      answer.na = false;
+      answer.manual = true;
+      hint.textContent = "";
+      const checkbox = el.closest(".q").querySelector("[data-action='na']");
+      if (checkbox) checkbox.checked = false;
+    } else {
+      answer.score = null;
+      hint.textContent = "Enter a whole number from 1 to 5.";
+    }
+    el.closest(".q").querySelectorAll(".choice").forEach((choice) => {
+      choice.setAttribute("aria-pressed", String(answer.score === Number(choice.dataset.score)));
+    });
+    touch(found.item, found.phase.id);
+    paint(found.item, found.phase);
+    return;
+  }
   if (el.dataset.raw) {
     const metric = found.phase.metrics.find((item) => item.id === el.dataset.raw);
     const answer = answerFor(found.item, found.phase.id, metric.id);
     answer.raw = el.value;
     const suggested = suggest(metric, el.value);
-    if (suggested.score) {
-      answer.score = suggested.score;
-      answer.na = false;
-      el.closest(".q").querySelectorAll(".choice").forEach((choice) => {
-        choice.disabled = false;
-        choice.setAttribute("aria-pressed", choice.dataset.score === String(suggested.score));
-      });
-    }
+    answer.score = suggested.score;
+    if (suggested.score != null) answer.na = false;
+    el.closest(".q").querySelectorAll(".choice").forEach((choice) => {
+      choice.setAttribute("aria-pressed", String(choice.dataset.score === String(suggested.score)));
+    });
+    const naBox = el.closest(".q").querySelector("[data-action='na']");
+    if (naBox && suggested.score != null) naBox.checked = false;
     const hint = el.closest(".q").querySelector("[data-hint]");
     hint.textContent = suggested.message;
     touch(found.item, found.phase.id);
